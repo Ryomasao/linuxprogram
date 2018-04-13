@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     exit(0);
 }
 
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 3
 
 static void do_cat(const char *path)
 {
@@ -36,6 +36,7 @@ static void do_cat(const char *path)
     unsigned char buf[BUFFER_SIZE];
     int n;
 
+    //openは独自のストリームを作成して、それに接続する。
     fd = open(path, O_RDONLY);
 
     if(fd < 0) die(path);
