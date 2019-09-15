@@ -2,7 +2,7 @@
 
 try() {
   fileName="$1"
-  make
+  make cat
   ./cat $fileName
 }
 
