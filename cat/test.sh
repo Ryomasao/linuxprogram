@@ -6,5 +6,5 @@ try() {
   ./cat $fileName
 }
 
-echo "引数で渡されたファイルを標準出力に出力すt"
+echo "引数で渡されたファイルを標準出力に出力する"
 try test.txt
