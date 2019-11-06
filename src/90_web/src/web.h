@@ -1,5 +1,4 @@
 //common
-#define LINE_BUF_SIZE 4096
 
 // errorCode
 enum ERROR_CODE {
