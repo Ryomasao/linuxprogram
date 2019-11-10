@@ -1,5 +1,6 @@
 // common
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,11 +21,17 @@ void *xmalloc(size_t sz);
 void upcase(char *str);
 
 // request.c
+typedef struct HTTPHeaderField {
+  char *name;
+  char *value;
+  struct HTTPHeaderField *next;
+} HTTPHeaderField;
+
 typedef struct {
   int protocol_minor_version;
   char *method;
   char *path;
-  struct HTTPHeaderField *header;
+  HTTPHeaderField *header;
   char *body;
   long length;
 } HTTPRequest;
