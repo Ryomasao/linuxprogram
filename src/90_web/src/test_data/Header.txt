@@ -1,3 +1,3 @@
-onigiri tabetai
+method path HTTP/1.1
 aiueo
 kaki
