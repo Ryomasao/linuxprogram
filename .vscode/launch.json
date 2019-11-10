@@ -1,0 +1,21 @@
+{
+  // IntelliSense を使用して利用可能な属性を学べます。
+  // 既存の属性の説明をホバーして表示します。
+  // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "web",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/90_web/src/web",
+      "args": ["../src/90_web/src/web.c", "true"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/src/90_web/src",
+      "environment": [],
+      //"preLaunchTask": "build 9cc",
+      "externalConsole": false,
+      "MIMode": "lldb"
+    }
+  ]
+}
