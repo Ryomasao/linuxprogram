@@ -18,7 +18,15 @@ HTTPRequest *read_request(FILE *in) {
   read_request_line(in, req);
 
   req->header = NULL;
-  h = read_header_field(in);
+
+  while(h = read_header_field(in)) {
+    // 一方向リストが理解するのに時間がかかる
+    // 0800  req->header  →0900
+    // 0900  h->next -> 1000
+    // 1000  h->next -> NULL
+    h->next = req->header;
+    req->header = h;
+  }
 
   return req;
 }
