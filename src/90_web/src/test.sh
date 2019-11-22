@@ -46,7 +46,9 @@ Get /hoge HTTP/1.1
 Host: google.com
 User-Agent: curl/7.54.0
 Accept: */*
-Content-Length: 100
+Content-Length: 4
+
+Body
 
 EOS
 ./web < sample.txt

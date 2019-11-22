@@ -12,6 +12,8 @@ static char *lookup_header_field_value(HTTPRequest *req, char *name);
 
 // HTTPヘッダのRFC
 // https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
+// Mozillaの情報量がちょうどいいかも
+// https://developer.mozilla.org/ja/docs/Web/HTTP/Messages
 HTTPRequest *read_request(FILE *in) {
   HTTPRequest *req;
   HTTPHeaderField *h;
@@ -32,8 +34,22 @@ HTTPRequest *read_request(FILE *in) {
 
   req->length = content_length(req);
 
-  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n",
-         req->method, req->path, req->protocol_minor_version, req->length);
+  if(req->length != 0) {
+    // TODO if(req->body > MAX_REQUEST_BODY_LENGTH)
+
+    req->body = xmalloc(req->length);
+    // freadは終端文字列をセットしない
+    // とはいえ、content-lengthのサイズは終端文字列なんて意識してない
+    // mallocするときに終端文字列分+1しとくべきなのかな
+    if(fread(req->body, req->length, 1, in) < 1)
+      log_exit(ERROR_CANNOT_READ_BODY, "failed to read request body");
+  } else {
+    req->body = NULL;
+  }
+
+  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n Body:%s\n",
+         req->method, req->path, req->protocol_minor_version, req->length,
+         req->body);
 
   return req;
 }
