@@ -5,6 +5,8 @@
 #define LINE_BUF_SIZE 4096
 static void read_request_line(FILE *in, HTTPRequest *req);
 static HTTPHeaderField *read_header_field(FILE *in);
+static long content_length(HTTPRequest *req);
+static char *lookup_header_field_value(HTTPRequest *req, char *name);
 
 // implement
 
@@ -19,7 +21,7 @@ HTTPRequest *read_request(FILE *in) {
 
   req->header = NULL;
 
-  while(h = read_header_field(in)) {
+  while((h = read_header_field(in))) {
     // 一方向リストが理解するのに時間がかかる
     // 0800  req->header  →0900
     // 0900  h->next -> 1000
@@ -27,6 +29,11 @@ HTTPRequest *read_request(FILE *in) {
     h->next = req->header;
     req->header = h;
   }
+
+  req->length = content_length(req);
+
+  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n",
+         req->method, req->path, req->protocol_minor_version, req->length);
 
   return req;
 }
@@ -80,8 +87,6 @@ static void read_request_line(FILE *in, HTTPRequest *req) {
 
   p += strlen("HTTP/1.");
   req->protocol_minor_version = atoi(p);
-
-  // printf("%s %s %d", req->method, req->path, req->protocol_minor_version);
 }
 
 static HTTPHeaderField *read_header_field(FILE *in) {
@@ -90,8 +95,14 @@ static HTTPHeaderField *read_header_field(FILE *in) {
   HTTPHeaderField *h = xmalloc(sizeof(HTTPHeaderField));
 
   if(!fgets(buf, LINE_BUF_SIZE, in))
-    log_exit(-1, "failed to read request header %s", strerror(errno));
+    log_exit(-1,
+             "failed to read request header %s.\n Make sure Header ends with a "
+             "line feed code ",
+             strerror(errno));
 
+  // fgetsは改行コードがあれば、改行コード含んだ文字列を返す。
+  // 一文字目が改行コードであれば、リクエストヘッダの終了と捉える。
+  // \r\nについては、Windowsでリクエストヘッダをエディタで作成した場合を考慮。
   if((buf[0] == '\n') || (strcmp(buf, "\r\n") == 0))
     return NULL;
 
@@ -119,4 +130,35 @@ static HTTPHeaderField *read_header_field(FILE *in) {
   strcpy(h->value, p);
 
   return h;
+}
+
+// https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.2
+// https://triple-underscore.github.io/rfc-others/RFC2616-ja.html#section-14.13
+static long content_length(HTTPRequest *req) {
+  char *val;
+  long len;
+
+  val = lookup_header_field_value(req, "Content-Length");
+
+  // Content-Lengthが見つからない場合
+  if(!val)
+    return 0;
+
+  len = atol(val);
+  if(len < 0) {
+    log_exit(ERROR_CONTENT_LENGTH_IS_NEGATIVE, "negative Content-Length:%ld",
+             len);
+  }
+
+  return len;
+}
+
+static char *lookup_header_field_value(HTTPRequest *req, char *name) {
+  HTTPHeaderField *h;
+  for(h = req->header; h; h = h->next) {
+    if(strcasecmp(h->name, name) == 0) {
+      return h->value;
+    }
+  }
+  return NULL;
 }
