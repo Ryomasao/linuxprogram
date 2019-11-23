@@ -47,9 +47,8 @@ HTTPRequest *read_request(FILE *in) {
     req->body = NULL;
   }
 
-  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n Body:%s\n",
-         req->method, req->path, req->protocol_minor_version, req->length,
-         req->body);
+  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n Body:%s\n", req->method,
+         req->path, req->protocol_minor_version, req->length, req->body);
 
   return req;
 }
@@ -70,8 +69,7 @@ static void read_request_line(FILE *in, HTTPRequest *req) {
   // GET /hoge/fuga HTTP/1.1
   p = strchr(buf, ' ');
   if(!p) {
-    log_exit(ERROR_METHODS_DOES_NOT_EXISTS,
-             "expected space on request line, but not exist");
+    log_exit(ERROR_METHODS_DOES_NOT_EXISTS, "expected space on request line, but not exist");
   }
   // *p++ = '/0'でシンプルに書ける
   // *p++ だからポインタに対する演算じゃないようにみえるけれど不思議
@@ -87,8 +85,7 @@ static void read_request_line(FILE *in, HTTPRequest *req) {
   path = p;
   p = strchr(path, ' ');
   if(!p) {
-    log_exit(ERROR_PATH_DOES_NOT_EXISTS,
-             "expected space on request line, but not exist");
+    log_exit(ERROR_PATH_DOES_NOT_EXISTS, "expected space on request line, but not exist");
   }
   *p = '\0';
   p++;
@@ -118,7 +115,7 @@ static HTTPHeaderField *read_header_field(FILE *in) {
 
   // fgetsは改行コードがあれば、改行コード含んだ文字列を返す。
   // 一文字目が改行コードであれば、リクエストヘッダの終了と捉える。
-  // \r\nについては、Windowsでリクエストヘッダをエディタで作成した場合を考慮。
+  // HTTPでは改行は、\r\n。エディタでリクエストヘッダを作成した場合、\nだけになるので、そちらも考慮。
   if((buf[0] == '\n') || (strcmp(buf, "\r\n") == 0))
     return NULL;
 
@@ -162,8 +159,7 @@ static long content_length(HTTPRequest *req) {
 
   len = atol(val);
   if(len < 0) {
-    log_exit(ERROR_CONTENT_LENGTH_IS_NEGATIVE, "negative Content-Length:%ld",
-             len);
+    log_exit(ERROR_CONTENT_LENGTH_IS_NEGATIVE, "negative Content-Length:%ld", len);
   }
 
   return len;
