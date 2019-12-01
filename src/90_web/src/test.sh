@@ -42,7 +42,7 @@ expect 24  $?
 
 echo "正しいリクエストヘッダーの場合、リターンコードは0"
 cat << EOS > sample.txt
-Get /hoge HTTP/1.1
+GET /hoge HTTP/1.1
 Host: google.com
 User-Agent: curl/7.54.0
 Accept: */*

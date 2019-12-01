@@ -17,12 +17,16 @@ int main(int argc, char *argv[]) {
 
   // TODO 引数のチェック
   // TODO signal補足処理の初期設定
-  service(tmpStdin, stdout, "docroot");
+  service(tmpStdin, stdout, "./docroot");
   exit(0);
 }
 
 static void service(FILE *in, FILE *out, char *docroot) {
+  HTTPRequest *req;
   // TODO リクエストパース
-  read_request(in);
+  req = read_request(in);
   // TODO レスポンス処理
+  response_to(req, out, docroot);
+
+  // TODO free_request
 }

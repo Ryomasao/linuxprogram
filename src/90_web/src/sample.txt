@@ -1,8 +1,8 @@
-Get /hoge HTTP/1.1
+GET /hoge HTTP/1.1
 Host: google.com
 User-Agent: curl/7.54.0
 Accept: */*
-Content-Length: 3
+Content-Length: 4
 
 Body
 

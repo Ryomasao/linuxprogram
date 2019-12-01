@@ -1,0 +1,1 @@
+Only root user can see this file.

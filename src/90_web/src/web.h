@@ -5,6 +5,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+
+// define
+#define SERVER_NAME "FIRST_HTTPD"
+#define SERVER_VERSION "1.0"
 
 // errorCode
 enum ERROR_CODE {
@@ -15,6 +21,7 @@ enum ERROR_CODE {
   ERROR_PROTOCOL_VERSION_DOSE_NOT_EXIST,
   ERROR_CONTENT_LENGTH_IS_NEGATIVE,
   ERROR_CANNOT_READ_BODY,
+  ERROR_SYSTEM_ERRRO = 999
 };
 
 // util.c
@@ -39,3 +46,12 @@ typedef struct {
 } HTTPRequest;
 
 HTTPRequest *read_request(FILE *in);
+
+// response.c
+void response_to(HTTPRequest *req, FILE *out, char *docroot);
+
+typedef struct {
+  char *path;
+  long size;
+  int ok; // pathが存在しない、許可されたファイルではない場合、0が設定。
+} FileInfo;
