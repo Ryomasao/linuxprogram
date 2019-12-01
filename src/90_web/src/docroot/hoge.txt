@@ -1,1 +1,2 @@
-Only root user can see this file.
+this is file content.
+if you can see this message, you will be succesful!!

@@ -1,4 +1,7 @@
 {
   // https://fastapple.hatenablog.com/entry/vscode/clang-format
-  "C_Cpp.clang_format_style": "{ BasedOnStyle: LLVM, BreakBeforeBraces: Attach, SpaceBeforeParens: Never, IndentWidth: 2, ColumnLimit: 100 }"
+  "C_Cpp.clang_format_style": "{ BasedOnStyle: LLVM, BreakBeforeBraces: Attach, SpaceBeforeParens: Never, IndentWidth: 2, ColumnLimit: 100 }",
+  "files.associations": {
+    "fcntl.h": "c"
+  }
 }

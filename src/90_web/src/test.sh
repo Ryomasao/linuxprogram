@@ -54,5 +54,19 @@ EOS
 ./web < sample.txt
 expect 0 $?
 
+echo "ファイルが存在する場合、ファイルの内容を出力する"
+cat << EOS > sample.txt
+GET /hoge.txt HTTP/1.1
+Host: google.com
+User-Agent: curl/7.54.0
+Accept: */*
+Content-Length: 4
+
+Body
+
+EOS
+./web < sample.txt
+expect 0 $?
+
 
 
