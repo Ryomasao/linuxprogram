@@ -6,6 +6,9 @@ static char *build_fspath(char *urlpath, char *docroot);
 static void free_fileinfo(FileInfo *info);
 static void not_found(HTTPRequest *req, FILE *out);
 static void output_common_header_fields(HTTPRequest *req, FILE *out, char *status);
+static void response_file_content(char *filepath, FILE *out);
+
+#define BLOCK_BUF_SIZE 1024
 
 void response_to(HTTPRequest *req, FILE *out, char *docroot) {
   if(strcmp(req->method, "GET") == 0) {
@@ -27,9 +30,46 @@ static void do_file_response(HTTPRequest *req, FILE *out, char *docroot) {
     return;
   }
 
-  // TODO ファイルの内容を出力
-  printf("FILE_INFO\n path:%s \n ok: %d\n", info->path, info->ok);
+  // debug
+  // printf("FILE_INFO\n path:%s \n ok: %d\n", info->path, info->ok);
+
+  output_common_header_fields(req, out, "200 OK");
+  fprintf(out, "Content-Length: %ld\r\n", info->size);
+  fprintf(out, "Content-Type: text/html\r\n");
+  fprintf(out, "\r\n");
+  response_file_content(info->path, out);
+
   free_fileinfo(info);
+}
+
+// filepathのファイルをオープンして、内容をoutに書き出す
+static void response_file_content(char *filepath, FILE *out) {
+  int fd;
+  size_t n;
+  char buf[BLOCK_BUF_SIZE];
+
+  // fopenじゃない理由はあるのだろうか。
+  fd = open(filepath, O_RDONLY);
+
+  if(fd < 0)
+    log_exit(ERROR_CANNOT_OPEN_FILE, "failed to open %s: %s", filepath, strerror(errno));
+
+  for(;;) {
+    n = read(fd, buf, BLOCK_BUF_SIZE);
+    if(n < 0) {
+      log_exit(ERROR_CANNOT_READ_FILE, "failed to read %s: %s", filepath, strerror(errno));
+    }
+
+    if(n == 0)
+      break;
+
+    if(fwrite(buf, 1, n, out) < 0) {
+      log_exit(ERROR_CANNOT_WRITE_FILE, "failed to write %s: %s", filepath, strerror(errno));
+    }
+  }
+
+  fflush(out);
+  close(fd);
 }
 
 // urlpathで指定しているファイルの付帯情報を取得し、Fileinfoにセットして返す
@@ -112,7 +152,7 @@ static void output_common_header_fields(HTTPRequest *req, FILE *out, char *statu
     log_exit(ERROR_SYSTEM_ERRRO, "gmtime() failed: %s", strerror(errno));
 
   strftime(buf, TIME_BUF_SIZE, "%a, %d %b %Y %H:%M:%S GMT", tm);
-  fprintf(out, "HTTP/1%d %s\r\n", req->protocol_minor_version, status);
+  fprintf(out, "HTTP/1.%d %s\r\n", req->protocol_minor_version, status);
   fprintf(out, "Date: %s\r\n", buf);
   fprintf(out, "Server: %s/%s\r\n", SERVER_NAME, SERVER_VERSION);
   fprintf(out, "Connection: close\r\n");
