@@ -40,7 +40,7 @@ EOS
 ./web < sample.txt
 expect 24  $?
 
-echo "正しいリクエストヘッダーの場合、リターンコードは0"
+echo "正しいリクエストヘッダーの場合、リターンコードは0、またNOT FOUNDのHTMLを返却する"
 cat << EOS > sample.txt
 GET /hoge HTTP/1.1
 Host: google.com
