@@ -1,6 +1,7 @@
 #include "web.h"
 
 static void service(FILE *in, FILE *out, char *docroot);
+static void listen_socket(char *port);
 
 int main(int argc, char *argv[]) {
 
@@ -26,4 +27,21 @@ static void service(FILE *in, FILE *out, char *docroot) {
   req = read_request(in);
   response_to(req, out, docroot);
   // TODO free_request
+}
+
+static void listen_socket(char *port) {
+  struct addrinfo hints, *res, *ai;
+  int err;
+
+  memset(&hints, 0, sizeof(struct addrinfo));
+
+  // サーバサイドでsocketの設定をするときは以下の設定をするみたい
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  // getaddrinfoは、
+  if((err = getaddrinfo(NULL, port, &hints, &res)) != 0) {
+    // TODO
+  }
 }
