@@ -23,10 +23,7 @@ int main(int argc, char *argv[]) {
 
 static void service(FILE *in, FILE *out, char *docroot) {
   HTTPRequest *req;
-  // TODO リクエストパース
   req = read_request(in);
-  // TODO レスポンス処理
   response_to(req, out, docroot);
-
   // TODO free_request
 }

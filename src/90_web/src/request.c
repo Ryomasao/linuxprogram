@@ -3,6 +3,9 @@
 
 // def
 #define LINE_BUF_SIZE 4096
+// request bodyのmaxsizeはRFCで決められていなそう。クライアント側、Webサーバー側で決定しているかも。
+#define MAX_REQUEST_BODY_LENGTH (1024 * 1024)
+
 static void read_request_line(FILE *in, HTTPRequest *req);
 static HTTPHeaderField *read_header_field(FILE *in);
 static long content_length(HTTPRequest *req);
@@ -35,7 +38,8 @@ HTTPRequest *read_request(FILE *in) {
   req->length = content_length(req);
 
   if(req->length != 0) {
-    // TODO if(req->body > MAX_REQUEST_BODY_LENGTH)
+    if(req->length > MAX_REQUEST_BODY_LENGTH)
+      log_exit(ERROR_BODY_LENGTH_TOO_LONG, "request body is too long");
 
     req->body = xmalloc(req->length);
     // freadは終端文字列をセットしない
@@ -47,8 +51,8 @@ HTTPRequest *read_request(FILE *in) {
     req->body = NULL;
   }
 
-  printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n Body:%s\n", req->method,
-         req->path, req->protocol_minor_version, req->length, req->body);
+  // printf(" METHOD:%s\n PATH:%s\n VERSION:%d\n Content-Length:%ld\n Body:%s\n", req->method,
+  //       req->path, req->protocol_minor_version, req->length, req->body);
 
   return req;
 }
