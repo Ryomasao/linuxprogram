@@ -1,4 +1,4 @@
-GET /hoge.txt HTTP/1.1
+HEAD /hoge.txt HTTP/1.1
 Host: google.com
 User-Agent: curl/7.54.0
 Accept: */*

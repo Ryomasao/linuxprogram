@@ -40,6 +40,11 @@ EOS
 ./web < sample.txt
 expect 24  $?
 
+echo "Skip リクエストBodyのサイズが1024*1024を超える場合、リターンコード25で終了する"
+echo "Skip リクエストでファイルがオープンできない場合、リターンコード26で終了する"
+echo "Skip リクエストでファイルのREADできない場合、リターンコード27で終了する"
+echo "Skip リクエストで標準出力にWRITEできない場合、リターンコード28で終了する"
+
 echo "正しいリクエストヘッダーの場合、リターンコードは0、またNOT FOUNDのHTMLを返却する"
 cat << EOS > sample.txt
 GET /hoge HTTP/1.1
@@ -54,9 +59,37 @@ EOS
 ./web < sample.txt
 expect 0 $?
 
-echo "ファイルが存在する場合、ファイルの内容を出力する"
+echo "GETリクエストでファイルが存在する場合、ファイルの内容を出力する"
 cat << EOS > sample.txt
 GET /hoge.txt HTTP/1.1
+Host: google.com
+User-Agent: curl/7.54.0
+Accept: */*
+Content-Length: 4
+
+Body
+
+EOS
+./web < sample.txt
+expect 0 $?
+
+echo "HEADリクエストでファイルが存在する場合、ファイルの内容を出力しない"
+cat << EOS > sample.txt
+HEAD /hoge.txt HTTP/1.1
+Host: google.com
+User-Agent: curl/7.54.0
+Accept: */*
+Content-Length: 4
+
+Body
+
+EOS
+./web < sample.txt
+expect 0 $?
+
+echo "HEADリクエストでファイルが存在する場合、ファイルの内容を出力しない"
+cat << EOS > sample.txt
+HEAD /hoge.txt HTTP/1.1
 Host: google.com
 User-Agent: curl/7.54.0
 Accept: */*

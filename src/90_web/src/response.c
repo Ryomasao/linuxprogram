@@ -1,6 +1,7 @@
 #include "web.h"
 
-static void do_file_response(HTTPRequest *req, FILE *out, char *docroot);
+static void do_get_response(HTTPRequest *req, FILE *out, char *docroot);
+static void do_head_response(HTTPRequest *req, FILE *out, char *docroot);
 static FileInfo *get_fileinfo(char *urlpath, char *docroot);
 static char *build_fspath(char *urlpath, char *docroot);
 static void free_fileinfo(FileInfo *info);
@@ -12,14 +13,16 @@ static void response_file_content(char *filepath, FILE *out);
 
 void response_to(HTTPRequest *req, FILE *out, char *docroot) {
   if(strcmp(req->method, "GET") == 0) {
-    do_file_response(req, out, docroot);
+    do_get_response(req, out, docroot);
+  } else if(strcmp(req->method, "HEAD") == 0) {
+    do_head_response(req, out, docroot);
   } else {
     // TODO
     log_exit(999, "NOT IMPLEMENTED");
   }
 }
 
-static void do_file_response(HTTPRequest *req, FILE *out, char *docroot) {
+static void do_get_response(HTTPRequest *req, FILE *out, char *docroot) {
   FileInfo *info;
   info = get_fileinfo(req->path, docroot);
 
@@ -38,6 +41,25 @@ static void do_file_response(HTTPRequest *req, FILE *out, char *docroot) {
   fprintf(out, "Content-Type: text/html\r\n");
   fprintf(out, "\r\n");
   response_file_content(info->path, out);
+
+  free_fileinfo(info);
+}
+
+static void do_head_response(HTTPRequest *req, FILE *out, char *docroot) {
+  FileInfo *info;
+  info = get_fileinfo(req->path, docroot);
+
+  if(info->ok == 0) {
+    free_fileinfo(info);
+    // TODO HEADの場合、body部分は返却しないようにしたほうがいい
+    not_found(req, out);
+    return;
+  }
+
+  output_common_header_fields(req, out, "200 OK");
+  fprintf(out, "Content-Length: %ld\r\n", info->size);
+  fprintf(out, "Content-Type: text/html\r\n");
+  fprintf(out, "\r\n");
 
   free_fileinfo(info);
 }
