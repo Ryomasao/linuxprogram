@@ -78,6 +78,8 @@ static void response_file_content(char *filepath, FILE *out) {
 
   for(;;) {
     n = read(fd, buf, BLOCK_BUF_SIZE);
+    // readはsize_t型を返す。size_t型は環境によって、unsignedだったりしなかったりするみたい
+    // unsignedの環境の場合、-にはならないので以下のコードでwarningが出る。
     if(n < 0) {
       log_exit(ERROR_CANNOT_READ_FILE, "failed to read %s: %s", filepath, strerror(errno));
     }
@@ -85,6 +87,7 @@ static void response_file_content(char *filepath, FILE *out) {
     if(n == 0)
       break;
 
+    // こちらもsize_t型を返す。
     if(fwrite(buf, 1, n, out) < 0) {
       log_exit(ERROR_CANNOT_WRITE_FILE, "failed to write %s: %s", filepath, strerror(errno));
     }
