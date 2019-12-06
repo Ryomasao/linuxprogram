@@ -1,7 +1,7 @@
 #include "web.h"
 
-static void service(int server_fd, char *docroot);
-static void service_for_debug(FILE *in, FILE *out, char *docroot);
+static void service(FILE *in, FILE *out, char *docroot);
+static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
 
 #define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
@@ -46,26 +46,53 @@ int main(int argc, char *argv[]) {
     if(!debugStdin)
       log_exit(99, " file open error");
 
-    service_for_debug(debugStdin, stdout, "./docroot");
+    service(debugStdin, stdout, "./docroot");
   }
 
   if(test_mode) {
-    service_for_debug(stdin, stdout, "./docroot");
+    service(stdin, stdout, "./docroot");
   }
 
   if(!(debug_mode || test_mode)) {
     // TODO signal補足処理の初期設定
     int server_fd;
     server_fd = listen_socket("8888");
-    service(server_fd, "./docroot");
+    listen_request(server_fd, "./docroot");
   }
 
   exit(0);
 }
 
-static void service(int server_fd, char *docroot) {}
+static void listen_request(int server_fd, char *docroot) {
+  for(;;) {
+    struct sockaddr_storage addr;
+    socklen_t addrlen = sizeof addr;
+    int sock;
+    int pid;
 
-static void service_for_debug(FILE *in, FILE *out, char *docroot) {
+    // ファイルディスクリプターのserver_fd(socket)から、
+    // accept状態のファイルディスクリプター(socket)を取得する
+    sock = accept(server_fd, (struct sockaddr *)&addr, &addrlen);
+    if(sock < 0)
+      log_exit(ERROR_CANNOT_ACEEPT_SOCKET, "accept(2) failed: %s", strerror(errno));
+
+    pid = fork();
+    // TODO forkに失敗したときなぜexitを直接呼ぶのか調べる
+    if(pid < 0)
+      exit(3);
+
+    // child process
+    if(pid == 0) {
+      FILE *in = fdopen(sock, "r");
+      FILE *out = fdopen(sock, "w");
+      service(in, out, docroot);
+      exit(0);
+    }
+    close(sock);
+  }
+}
+
+static void service(FILE *in, FILE *out, char *docroot) {
   HTTPRequest *req;
   req = read_request(in);
   response_to(req, out, docroot);
