@@ -5,7 +5,19 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "web",
+      "name": "web_socket",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/90_web/src/web",
+      "args": ["../src/90_web/src/web.c"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/src/90_web/src",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "web_debug",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/src/90_web/src/web",

@@ -57,6 +57,10 @@ int main(int argc, char *argv[]) {
     // TODO signal補足処理の初期設定
     int server_fd;
     server_fd = listen_socket("8888");
+
+    printf("webserer listen on %d\n", 8888);
+    fflush(stdout);
+
     listen_request(server_fd, "./docroot");
   }
 
