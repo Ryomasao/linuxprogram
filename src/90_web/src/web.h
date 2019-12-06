@@ -20,6 +20,7 @@
 #define MAX_BACKLOG 5
 
 // errorCode
+// exit(3)の引数int型だけど、0~255を超える値を設定するとオーバーフローする
 enum ERROR_CODE {
   // common error
   ERROR_ALLOCATE_MEMORY = 10,
@@ -35,9 +36,9 @@ enum ERROR_CODE {
   ERROR_CANNOT_READ_FILE,
   ERROR_CANNOT_WRITE_FILE,
   // About Network Error
-  ERROR_CANNOT_ASSIGN_IP = 800,
-  ERROR_CANNOT_LISTEN_SOCKET = 801,
-  ERROR_SYSTEM_ERRRO = 999
+  ERROR_CANNOT_ASSIGN_IP = 100,
+  ERROR_CANNOT_LISTEN_SOCKET = 101,
+  ERROR_SYSTEM_ERRRO = 255
 };
 
 // util.c

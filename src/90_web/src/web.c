@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
   // TODO 引数のチェック
   // TODO signal補足処理の初期設定
   // TODO ポート番号をオプションで受け取るようにする
-  listen_socket("3000");
+  listen_socket("8888");
   service(tmpStdin, stdout, "./docroot");
   exit(0);
 }
@@ -58,6 +58,7 @@ static int listen_socket(char *port) {
     if(sock < 0)
       continue;
 
+    // portがすでにつかわれているとbindで失敗するっぽい
     if(bind(sock, ai->ai_addr, ai->ai_addrlen) < 0) {
       close(sock);
       continue;
