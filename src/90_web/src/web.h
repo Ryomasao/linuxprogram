@@ -2,11 +2,15 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <netdb.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -14,9 +18,19 @@
 #define SERVER_NAME "FIRST_HTTPD"
 #define SERVER_VERSION "1.0"
 
+#define MAX_BACKLOG 5
+
 // errorCode
+// exit(3)の引数int型だけど、0~255を超える値を設定するとオーバーフローする
+// TODO エラーのカテゴリでわけたほうがよさそう
+enum PARAM_ERROR_CODE {
+  ERROR_INVALID_PARAM = 10,
+};
+
 enum ERROR_CODE {
+  // common error
   ERROR_ALLOCATE_MEMORY = 10,
+  // About Request Header
   ERROR_NO_REQUEST_LINE = 20,
   ERROR_METHODS_DOES_NOT_EXISTS,
   ERROR_PATH_DOES_NOT_EXISTS,
@@ -27,7 +41,11 @@ enum ERROR_CODE {
   ERROR_CANNOT_OPEN_FILE,
   ERROR_CANNOT_READ_FILE,
   ERROR_CANNOT_WRITE_FILE,
-  ERROR_SYSTEM_ERRRO = 999
+  // About Network Error
+  ERROR_CANNOT_ASSIGN_IP = 100,
+  ERROR_CANNOT_LISTEN_SOCKET = 101,
+  ERROR_CANNOT_ACEEPT_SOCKET = 102,
+  ERROR_SYSTEM_ERRRO = 255
 };
 
 // util.c
