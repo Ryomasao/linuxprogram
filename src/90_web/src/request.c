@@ -57,6 +57,23 @@ HTTPRequest *read_request(FILE *in) {
   return req;
 }
 
+void free_request(HTTPRequest *req) {
+  HTTPHeaderField *h, *head;
+  head = req->header;
+
+  while(head) {
+    h = head;
+    head = head->next;
+    free(h->name);
+    free(h->value);
+    free(h);
+  }
+  free(req->method);
+  free(req->path);
+  free(req->body);
+  free(req);
+}
+
 // HTTPヘッダの一行目はRequest-Lineと呼ばれる
 // METHOD Request-URI HTTP_Version
 // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF

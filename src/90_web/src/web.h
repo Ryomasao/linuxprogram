@@ -70,6 +70,7 @@ typedef struct {
 } HTTPRequest;
 
 HTTPRequest *read_request(FILE *in);
+void free_request(HTTPRequest *req);
 
 // response.c
 void response_to(HTTPRequest *req, FILE *out, char *docroot);

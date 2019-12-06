@@ -100,7 +100,7 @@ static void service(FILE *in, FILE *out, char *docroot) {
   HTTPRequest *req;
   req = read_request(in);
   response_to(req, out, docroot);
-  // TODO free_request
+  free_request(req);
 }
 
 static int listen_socket(char *port) {
