@@ -1,30 +1,71 @@
 #include "web.h"
 
-static void service(FILE *in, FILE *out, char *docroot);
+static void service(int server_fd, char *docroot);
+static void service_for_debug(FILE *in, FILE *out, char *docroot);
 static int listen_socket(char *port);
+
+#define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
+
+// vscodeでのdebugを想定
+static int debug_mode = 0;
+// テストコードでの実行を想定
+static int test_mode = 0;
+static struct option longopts[] = {
+    {"debug", no_argument, &debug_mode, 1},  {"test", no_argument, &test_mode, 1},
+    {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
+    {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
+    {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
 
 int main(int argc, char *argv[]) {
 
-  FILE *tmpStdin = stdin;
+  int opt;
 
-  // vscodeのデバックで標準入力を扱える方法がわからないので、ひとまず
-  if(argv[1]) {
+  while((opt = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
+    // TODO ポート番号等をオプションで受け取るようにする
+    // TODO getoptの使い方をちゃんとみる
+    switch(opt) {
+    case 0:
+      break;
+    case 'u':
+      break;
+    case 'h':
+      fprintf(stdout, USAGE, argv[0]);
+      exit(0);
+    case '?':
+      fprintf(stderr, USAGE, argv[0]);
+      exit(1);
+    }
+  }
+
+  if(debug_mode && test_mode)
+    log_exit(ERROR_INVALID_PARAM, "you can not use debug and test mode together");
+
+  if(debug_mode) {
+    // vscodeのデバックで標準入力を扱える方法がわからないので、ひとまず
     FILE *debugStdin = fopen("./test_data/HEADER.txt", "r");
     if(!debugStdin)
       log_exit(99, " file open error");
 
-    tmpStdin = debugStdin;
+    service_for_debug(debugStdin, stdout, "./docroot");
   }
 
-  // TODO 引数のチェック
-  // TODO signal補足処理の初期設定
-  // TODO ポート番号をオプションで受け取るようにする
-  listen_socket("8888");
-  service(tmpStdin, stdout, "./docroot");
+  if(test_mode) {
+    service_for_debug(stdin, stdout, "./docroot");
+  }
+
+  if(!(debug_mode || test_mode)) {
+    // TODO signal補足処理の初期設定
+    int server_fd;
+    server_fd = listen_socket("8888");
+    service(server_fd, "./docroot");
+  }
+
   exit(0);
 }
 
-static void service(FILE *in, FILE *out, char *docroot) {
+static void service(int server_fd, char *docroot) {}
+
+static void service_for_debug(FILE *in, FILE *out, char *docroot) {
   HTTPRequest *req;
   req = read_request(in);
   response_to(req, out, docroot);

@@ -9,7 +9,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/src/90_web/src/web",
-      "args": ["../src/90_web/src/web.c", "true"],
+      "args": ["../src/90_web/src/web.c", "--debug", "--chroot", "--user=hoge"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/src/90_web/src",
       "environment": [],

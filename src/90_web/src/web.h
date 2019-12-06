@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <netdb.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -21,6 +22,11 @@
 
 // errorCode
 // exit(3)の引数int型だけど、0~255を超える値を設定するとオーバーフローする
+// TODO エラーのカテゴリでわけたほうがよさそう
+enum PARAM_ERROR_CODE {
+  ERROR_INVALID_PARAM = 10,
+};
+
 enum ERROR_CODE {
   // common error
   ERROR_ALLOCATE_MEMORY = 10,
