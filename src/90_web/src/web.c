@@ -74,24 +74,29 @@ static void listen_request(int server_fd, char *docroot) {
     int sock;
     int pid;
 
-    // ファイルディスクリプターのserver_fd(socket)から、
-    // accept状態のファイルディスクリプター(socket)を取得する
+    // accept()はsocketにつながっているファイルディスクリプタをもとに、そのsocketに接続がくるまで待つ。
     sock = accept(server_fd, (struct sockaddr *)&addr, &addrlen);
     if(sock < 0)
       log_exit(ERROR_CANNOT_ACEEPT_SOCKET, "accept(2) failed: %s", strerror(errno));
 
     pid = fork();
-    // TODO forkに失敗したときなぜexitを直接呼ぶのか調べる
+    // forkに失敗したときはlog_exitじゃないのはなぜかしら。
     if(pid < 0)
       exit(3);
 
     // child process
     if(pid == 0) {
+      // fdopen()はファイルディスクリプタから、FILE型に変換するためのもの
+      // これにより、後続のserviceはつながっている先が標準入力なのか、socketなのかを意識しなくてよくなる。
       FILE *in = fdopen(sock, "r");
       FILE *out = fdopen(sock, "w");
       service(in, out, docroot);
       exit(0);
     }
+    // accetptで接続済のsocketは親プロセスでもcloseをする必要がある。
+    // forkして出来た子のプロセスはexit()で済むけど、親側は起動しつづけるので、別途closeする。
+    // ※ forkしてもsocketが複製されるわけではなくって、親と子でそれぞれ参照しているイメージ？
+    //   参照しているプロセス全部でもう使わないよ状態にしとかないとsocketが残りっぱなしになる。
     close(sock);
   }
 }
