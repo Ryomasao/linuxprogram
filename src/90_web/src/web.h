@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <netdb.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +31,7 @@ enum PARAM_ERROR_CODE {
 enum ERROR_CODE {
   // common error
   ERROR_ALLOCATE_MEMORY = 10,
+  ERROR_SIGACTION_FAILED = 11,
   // About Request Header
   ERROR_NO_REQUEST_LINE = 20,
   ERROR_METHODS_DOES_NOT_EXISTS,
