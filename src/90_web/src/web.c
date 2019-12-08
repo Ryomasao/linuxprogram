@@ -1,24 +1,35 @@
 #include "web.h"
 
+#define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
+
 // sighandler_t型を定義する
 // sighandlet_t型は、intを引数にとりvoidを返す関数へのポインタ
 typedef void (*sighandler_t)(int);
 static void trap_signal(int sig, sighandler_t handler);
 static void install_signal_handlers();
-// 関数を引数で渡す時は、staticつけちゃいけない？
-void signal_exit(int sig);
+static void signal_exit(int sig);
 static void service(FILE *in, FILE *out, char *docroot);
 static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
 
-void signal_exit(int sig) {
-  //
-  log_exit(12, "exit by signal %d", sig);
-}
+// vscodeでのdebugを想定
+static int debug_mode = 0;
+// テストコードでの実行を想定
+static int test_mode = 0;
+static struct option longopts[] = {
+    {"debug", no_argument, &debug_mode, 1},  {"test", no_argument, &test_mode, 1},
+    {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
+    {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
+    {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
 
 static void install_signal_handlers() {
   // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
   trap_signal(SIGPIPE, signal_exit);
+}
+
+static void signal_exit(int sig) {
+  //
+  log_exit(12, "exit by signal %d", sig);
 }
 
 static void trap_signal(int sig, sighandler_t handler) {
@@ -30,18 +41,6 @@ static void trap_signal(int sig, sighandler_t handler) {
     log_exit(ERROR_SIGACTION_FAILED, "sigaction() failed: %s", strerror(errno));
   }
 }
-
-#define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
-
-// vscodeでのdebugを想定
-static int debug_mode = 0;
-// テストコードでの実行を想定
-static int test_mode = 0;
-static struct option longopts[] = {
-    {"debug", no_argument, &debug_mode, 1},  {"test", no_argument, &test_mode, 1},
-    {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
-    {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
-    {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
 
 int main(int argc, char *argv[]) {
 
