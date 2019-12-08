@@ -1,8 +1,35 @@
 #include "web.h"
 
+// sighandler_t型を定義する
+// sighandlet_t型は、intを引数にとりvoidを返す関数へのポインタ
+typedef void (*sighandler_t)(int);
+static void trap_signal(int sig, sighandler_t handler);
+static void install_signal_handlers();
+// 関数を引数で渡す時は、staticつけちゃいけない？
+void signal_exit(int sig);
 static void service(FILE *in, FILE *out, char *docroot);
 static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
+
+void signal_exit(int sig) {
+  //
+  log_exit(12, "exit by signal %d", sig);
+}
+
+static void install_signal_handlers() {
+  // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
+  trap_signal(SIGPIPE, signal_exit);
+}
+
+static void trap_signal(int sig, sighandler_t handler) {
+  struct sigaction act;
+  act.sa_handler = handler;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags = SA_RESTART;
+  if(sigaction(sig, &act, NULL) < 0) {
+    log_exit(ERROR_SIGACTION_FAILED, "sigaction() failed: %s", strerror(errno));
+  }
+}
 
 #define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
 
@@ -54,7 +81,8 @@ int main(int argc, char *argv[]) {
   }
 
   if(!(debug_mode || test_mode)) {
-    // TODO signal補足処理の初期設定
+    install_signal_handlers();
+
     int server_fd;
     server_fd = listen_socket("8888");
 
