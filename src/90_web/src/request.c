@@ -45,6 +45,10 @@ HTTPRequest *read_request(FILE *in) {
     // freadは終端文字列をセットしない
     // とはいえ、content-lengthのサイズは終端文字列なんて意識してない
     // mallocするときに終端文字列分+1しとくべきなのかな
+
+    // FILE inがsocketにつながっている場合、どの状態で読み込まれるんだろう？
+    // パケットが全部届き終わってから、読み込むって保証されているのかな？とか思ったけど、
+    // TCP層の話なので、そのへんはカーネルが保証してくれているんだと思う。
     if(fread(req->body, req->length, 1, in) < 1)
       log_exit(ERROR_CANNOT_READ_BODY, "failed to read request body");
   } else {

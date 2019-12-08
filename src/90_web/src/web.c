@@ -74,24 +74,29 @@ static void listen_request(int server_fd, char *docroot) {
     int sock;
     int pid;
 
-    // ファイルディスクリプターのserver_fd(socket)から、
-    // accept状態のファイルディスクリプター(socket)を取得する
+    // accept()はsocketにつながっているファイルディスクリプタをもとに、そのsocketに接続がくるまで待つ。
     sock = accept(server_fd, (struct sockaddr *)&addr, &addrlen);
     if(sock < 0)
       log_exit(ERROR_CANNOT_ACEEPT_SOCKET, "accept(2) failed: %s", strerror(errno));
 
     pid = fork();
-    // TODO forkに失敗したときなぜexitを直接呼ぶのか調べる
+    // forkに失敗したときはlog_exitじゃないのはなぜかしら。
     if(pid < 0)
       exit(3);
 
     // child process
     if(pid == 0) {
+      // fdopen()はファイルディスクリプタから、FILE型に変換するためのもの
+      // これにより、後続のserviceはつながっている先が標準入力なのか、socketなのかを意識しなくてよくなる。
       FILE *in = fdopen(sock, "r");
       FILE *out = fdopen(sock, "w");
       service(in, out, docroot);
       exit(0);
     }
+    // accetptで接続済のsocketは親プロセスでもcloseをする必要がある。
+    // forkして出来た子のプロセスはexit()で済むけど、親側は起動しつづけるので、別途closeする。
+    // ※ forkしてもsocketが複製されるわけではなくって、親と子でそれぞれ参照しているイメージ？
+    //   参照しているプロセス全部でもう使わないよ状態にしとかないとsocketが残りっぱなしになる。
     close(sock);
   }
 }
@@ -114,9 +119,9 @@ static int listen_socket(char *port) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
 
-  // getaddrinfoは、ホスト名、ポート番号から使えるIPが含まれる構造体のリストを返してくれる。
+  // getaddrinfoは、ホスト名、ポート番号から使えるアドレスが含まれる構造体のリストを返してくれる。
   // サーバサイドときは、ホスト名はNULLでいいっぽい。
-  // 使えるIPっていっても、大抵はひとつらしい。どういうときに複数になるのかしら。NICが複数ある場合？
+  // 使えるアドレスっていっても、大抵はひとつらしい。どういうときに複数になるのかしら。NICが複数ある場合？
   // イメージとして、ホスト名とポートがベースにあって、hintsを与えることで絞り込むような感じっぽい。
   if((err = getaddrinfo(NULL, port, &hints, &res)) != 0)
     log_exit(ERROR_CANNOT_ASSIGN_IP, (char *)gai_strerror(err));
@@ -124,18 +129,23 @@ static int listen_socket(char *port) {
   // getaddrinfoで取得した構造体をもとに、socketとして使えるアドレスを探す
   for(ai = res; ai; ai = ai->ai_next) {
     int sock;
-    // sokcet→bind→listen→acceptの詳細な話は一旦置いておく
+    // socket()はsocketを作成し、それにつながるファイルディスクリプタを返す。
+    // ファイルディスクリプタは、カーネルがストリームに接続するためにアプリに見せてくれているもの。
+    // socketはストリームとはちょっと違う扱いなのかもしれないけど、ファイルディスクリプタ経由で参照できる。
     sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 
     if(sock < 0)
       continue;
 
+    // bind()は接続を待つアドレスをsock()で作成したsocketに割り当てる。
     // portがすでにつかわれているとbindで失敗するっぽい
     if(bind(sock, ai->ai_addr, ai->ai_addrlen) < 0) {
       close(sock);
       continue;
     }
 
+    // listen()は、このsocketは接続を待ってるんだよ！ってカーネルに伝えるためのもの。
+    /// 第二引数は、このsocketが同時に受け付けるコネクション数とのこと。どういうことだろう。
     if(listen(sock, MAX_BACKLOG) < 0) {
       close(sock);
       continue;
