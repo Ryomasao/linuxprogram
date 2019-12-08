@@ -11,6 +11,7 @@ static void signal_exit(int sig);
 static void service(FILE *in, FILE *out, char *docroot);
 static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
+static void become_daemon();
 
 // vscodeでのdebugを想定
 static int debug_mode = 0;
@@ -21,6 +22,54 @@ static struct option longopts[] = {
     {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
     {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
     {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
+
+// daemonになるための関数
+// dameon(3)を使うと、以下の処理はいらなくなる
+static void become_daemon() {
+  int n;
+
+  // プロセスがカレントディレクトリにしているディレクトリは、プロセスが実行中、アンマウントできない。
+  // なのでルートディレクトリに移動しておくとよいらしい。
+  // ルートディレクトリはアンマウントするとないからっていう前提？
+  if(chdir("/") < 0)
+    log_exit(ERROR_CHDIR_FAILED, "chdir(2) failed:%s", strerror(errno));
+
+  // 標準入出力につながらないようにしておく
+  freopen("/dev/null", "r", stdin);
+  freopen("/dev/null", "w", stdout);
+  freopen("/dev/null", "w", stderr);
+
+  // 後述のsetsidをする際に、自分がプロセスグループリーダーにならないようにforkしとく
+  n = fork();
+  if(n < 0)
+    log_exit(ERROR_FORK_FAILED, "fork(2) failed: %s", strerror(errno));
+
+  // forkした際、親プロセスは不要なので終了
+  // exit(3)だと、FILEに対してfflushが走るからとのこと。子プロセスで参照しているFILEに関しても走っちゃうよってことかな？
+  // それがどういう悪影響があるのか謎。
+  // socketに書き込んだデータがいつクライアントに送信されるのかが、あんまりわかってない。
+  // fflushしたからといって、すぐに送るかというとそんなことはなさそう。
+  // socketにはsocketのバッファを持っている。
+  // https://stackoverflow.com/questions/914286/what-does-it-mean-to-flush-a-socket
+  if(n != 0)
+    _exit(0);
+
+  // プロセスの関係を復習する
+  // - 全てのプロセスは、なんからのプロセスから生成されていて、親子関係にある
+  // - 最初のプロセスはsystemd
+  // - プロセスグループとセッションっていう概念もある
+  // - プロセスグループはシェルのために存在していて、コマンドをまとめて実行したときのグループ
+  // - セッションは、ユーザーが端末からログイン〜ログアウトするまでの管理するグループ
+  // - ps j コマンドで、PPID(親のPID) PID PGID SID　ttyを参照できる
+  // - ttyは制御端末
+  // - PIDとPGIDが等しい場合、プロセスグループリーダー、SIDとPIDが等しければ、セッションリーダー
+  // - リーダーは、新しいグループや、セッションをつくれない
+
+  // 長くなったけど、forkして、リーダーではないプロセスになった上でsetsidで新しいセッションをつくる
+  // 新しいセッションなので、ユーザーがログインしたセッションが終了しても(ログアウトとか)プロセスが生き続けることができる
+  if(setsid() < 0)
+    log_exit(ERROR_SETSID_FAILED, "setsid(2) failed: %s", strerror(errno));
+}
 
 static void install_signal_handlers() {
   // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
@@ -84,9 +133,10 @@ int main(int argc, char *argv[]) {
 
     int server_fd;
     server_fd = listen_socket("8888");
-
     printf("webserer listen on %d\n", 8888);
     fflush(stdout);
+
+    become_daemon();
 
     listen_request(server_fd, "./docroot");
   }
