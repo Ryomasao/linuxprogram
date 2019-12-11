@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -20,6 +21,12 @@
 #define SERVER_VERSION "1.0"
 
 #define MAX_BACKLOG 5
+
+// global variables
+// vscodeでのdebugを想定
+extern int global_debug_mode;
+// テストコードでの実行を想定
+extern int global_test_mode;
 
 // errorCode
 // exit(3)の引数int型だけど、0~255を超える値を設定するとオーバーフローする

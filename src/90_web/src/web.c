@@ -14,14 +14,18 @@ static int listen_socket(char *port);
 static void become_daemon();
 
 // vscodeでのdebugを想定
-static int debug_mode = 0;
+int global_debug_mode = 0;
 // テストコードでの実行を想定
-static int test_mode = 0;
-static struct option longopts[] = {
-    {"debug", no_argument, &debug_mode, 1},  {"test", no_argument, &test_mode, 1},
-    {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
-    {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
-    {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
+int global_test_mode = 0;
+
+static struct option longopts[] = {{"debug", no_argument, &global_debug_mode, 1},
+                                   {"test", no_argument, &global_test_mode, 1},
+                                   {"chroot", no_argument, NULL, 'c'},
+                                   {"user", required_argument, NULL, 'u'},
+                                   {"group", required_argument, NULL, 'g'},
+                                   {"port", required_argument, NULL, 'p'},
+                                   {"help", no_argument, NULL, 'h'},
+                                   {0, 0, 0, 0}};
 
 // daemonになるための関数
 // dameon(3)を使うと、以下の処理はいらなくなる
@@ -112,10 +116,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if(debug_mode && test_mode)
+  if(global_debug_mode && global_test_mode)
     log_exit(ERROR_INVALID_PARAM, "you can not use debug and test mode together");
 
-  if(debug_mode) {
+  if(global_debug_mode) {
     // vscodeのデバックで標準入力を扱える方法がわからないので、ひとまず
     FILE *debugStdin = fopen("./test_data/HEADER.txt", "r");
     if(!debugStdin)
@@ -124,18 +128,17 @@ int main(int argc, char *argv[]) {
     service(debugStdin, stdout, "./docroot");
   }
 
-  if(test_mode) {
+  if(global_test_mode) {
     service(stdin, stdout, "./docroot");
   }
 
-  if(!(debug_mode || test_mode)) {
+  if(!(global_debug_mode || global_test_mode)) {
     install_signal_handlers();
 
     int server_fd;
     server_fd = listen_socket("8888");
     printf("webserer listen on %d\n", 8888);
     fflush(stdout);
-
     become_daemon();
 
     listen_request(server_fd, "./docroot");
