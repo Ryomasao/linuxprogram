@@ -1,3 +1,5 @@
+// ./README.mdに書いた
+#define _GNU_SOURCE
 // common
 #include <ctype.h>
 #include <errno.h>
