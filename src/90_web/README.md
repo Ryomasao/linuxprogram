@@ -28,3 +28,20 @@ Method SP Request-URI SP HTTP-Version\r\n
 
 MDN をみると、さらに`request-headers`,`general headers`,`entity headers`とわけている。
 https://developer.mozilla.org/ja/docs/Web/HTTP/Messages
+
+# システムコールを見る
+
+web サーバーを起動して
+
+```
+$ ./web
+```
+
+プロセス ID を調べて、以下のコマンドで strace っぽいことができる。
+
+```
+$ sudo dtruss -p [プロセスID]
+```
+
+ただ、子プロセスのシステムコールが見たい場合、リクエストを送信してからじゃないと子プロセスのプロセス ID わかんないから確認できてない。
+prefork を実装したら確認できるかしら。

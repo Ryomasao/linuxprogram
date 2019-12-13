@@ -1,3 +1,5 @@
+// ./README.mdに書いた
+#define _GNU_SOURCE
 // common
 #include <ctype.h>
 #include <errno.h>
@@ -12,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -20,6 +23,12 @@
 #define SERVER_VERSION "1.0"
 
 #define MAX_BACKLOG 5
+
+// global variables
+// vscodeでのdebugを想定
+extern int global_debug_mode;
+// テストコードでの実行を想定
+extern int global_test_mode;
 
 // errorCode
 // exit(3)の引数int型だけど、0~255を超える値を設定するとオーバーフローする
@@ -32,6 +41,9 @@ enum ERROR_CODE {
   // common error
   ERROR_ALLOCATE_MEMORY = 10,
   ERROR_SIGACTION_FAILED = 11,
+  ERROR_CHDIR_FAILED = 12,
+  ERROR_FORK_FAILED = 13,
+  ERROR_SETSID_FAILED = 14,
   // About Request Header
   ERROR_NO_REQUEST_LINE = 20,
   ERROR_METHODS_DOES_NOT_EXISTS,

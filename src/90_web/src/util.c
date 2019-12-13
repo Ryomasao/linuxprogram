@@ -2,10 +2,14 @@
 
 void log_exit(int exitCode, char *fmt, ...) {
   va_list ap;
-
   va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  fputc('\n', stderr);
+
+  if(global_debug_mode || global_test_mode) {
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+  } else {
+    vsyslog(LOG_ERR, fmt, ap);
+  }
   va_end(ap);
   exit(exitCode);
 }

@@ -1,24 +1,88 @@
 #include "web.h"
 
+#define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
+
 // sighandler_t型を定義する
 // sighandlet_t型は、intを引数にとりvoidを返す関数へのポインタ
 typedef void (*sighandler_t)(int);
 static void trap_signal(int sig, sighandler_t handler);
 static void install_signal_handlers();
-// 関数を引数で渡す時は、staticつけちゃいけない？
-void signal_exit(int sig);
+static void signal_exit(int sig);
 static void service(FILE *in, FILE *out, char *docroot);
 static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
+static void become_daemon();
 
-void signal_exit(int sig) {
-  //
-  log_exit(12, "exit by signal %d", sig);
+// vscodeでのdebugを想定
+int global_debug_mode = 0;
+// テストコードでの実行を想定
+int global_test_mode = 0;
+
+static struct option longopts[] = {{"debug", no_argument, &global_debug_mode, 1},
+                                   {"test", no_argument, &global_test_mode, 1},
+                                   {"chroot", no_argument, NULL, 'c'},
+                                   {"user", required_argument, NULL, 'u'},
+                                   {"group", required_argument, NULL, 'g'},
+                                   {"port", required_argument, NULL, 'p'},
+                                   {"help", no_argument, NULL, 'h'},
+                                   {0, 0, 0, 0}};
+
+// daemonになるための関数
+// dameon(3)を使うと、以下の処理はいらなくなる
+static void become_daemon() {
+  int n;
+
+  // プロセスがカレントディレクトリにしているディレクトリは、プロセスが実行中、アンマウントできない。
+  // なのでルートディレクトリに移動しておくとよいらしい。
+  // ルートディレクトリはアンマウントするとないからっていう前提？
+  if(chdir("/") < 0)
+    log_exit(ERROR_CHDIR_FAILED, "chdir(2) failed:%s", strerror(errno));
+
+  // 標準入出力につながらないようにしておく
+  freopen("/dev/null", "r", stdin);
+  freopen("/dev/null", "w", stdout);
+  freopen("/dev/null", "w", stderr);
+
+  // 後述のsetsidをする際に、自分がプロセスグループリーダーにならないようにforkしとく
+  n = fork();
+  if(n < 0)
+    log_exit(ERROR_FORK_FAILED, "fork(2) failed: %s", strerror(errno));
+
+  // forkした際、親プロセスは不要なので終了
+  // exit(3)だと、FILEに対してfflushが走るからとのこと。子プロセスで参照しているFILEに関しても走っちゃうよってことかな？
+  // それがどういう悪影響があるのか謎。
+  // socketに書き込んだデータがいつクライアントに送信されるのかが、あんまりわかってない。
+  // fflushしたからといって、すぐに送るかというとそんなことはなさそう。
+  // socketにはsocketのバッファを持っている。
+  // https://stackoverflow.com/questions/914286/what-does-it-mean-to-flush-a-socket
+  if(n != 0)
+    _exit(0);
+
+  // プロセスの関係を復習する
+  // - 全てのプロセスは、なんからのプロセスから生成されていて、親子関係にある
+  // - 最初のプロセスはsystemd
+  // - プロセスグループとセッションっていう概念もある
+  // - プロセスグループはシェルのために存在していて、コマンドをまとめて実行したときのグループ
+  // - セッションは、ユーザーが端末からログイン〜ログアウトするまでの管理するグループ
+  // - ps j コマンドで、PPID(親のPID) PID PGID SID　ttyを参照できる
+  // - ttyは制御端末
+  // - PIDとPGIDが等しい場合、プロセスグループリーダー、SIDとPIDが等しければ、セッションリーダー
+  // - リーダーは、新しいグループや、セッションをつくれない
+
+  // 長くなったけど、forkして、リーダーではないプロセスになった上でsetsidで新しいセッションをつくる
+  // 新しいセッションなので、ユーザーがログインしたセッションが終了しても(ログアウトとか)プロセスが生き続けることができる
+  if(setsid() < 0)
+    log_exit(ERROR_SETSID_FAILED, "setsid(2) failed: %s", strerror(errno));
 }
 
 static void install_signal_handlers() {
   // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
   trap_signal(SIGPIPE, signal_exit);
+}
+
+static void signal_exit(int sig) {
+  //
+  log_exit(12, "exit by signal %d", sig);
 }
 
 static void trap_signal(int sig, sighandler_t handler) {
@@ -30,18 +94,6 @@ static void trap_signal(int sig, sighandler_t handler) {
     log_exit(ERROR_SIGACTION_FAILED, "sigaction() failed: %s", strerror(errno));
   }
 }
-
-#define USAGE "Usage: %s [--port=n] [--chroot --user=u --group=g] [--debug] <docroot>\n"
-
-// vscodeでのdebugを想定
-static int debug_mode = 0;
-// テストコードでの実行を想定
-static int test_mode = 0;
-static struct option longopts[] = {
-    {"debug", no_argument, &debug_mode, 1},  {"test", no_argument, &test_mode, 1},
-    {"chroot", no_argument, NULL, 'c'},      {"user", required_argument, NULL, 'u'},
-    {"group", required_argument, NULL, 'g'}, {"port", required_argument, NULL, 'p'},
-    {"help", no_argument, NULL, 'h'},        {0, 0, 0, 0}};
 
 int main(int argc, char *argv[]) {
 
@@ -64,10 +116,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if(debug_mode && test_mode)
+  if(global_debug_mode && global_test_mode)
     log_exit(ERROR_INVALID_PARAM, "you can not use debug and test mode together");
 
-  if(debug_mode) {
+  if(global_debug_mode) {
     // vscodeのデバックで標準入力を扱える方法がわからないので、ひとまず
     FILE *debugStdin = fopen("./test_data/HEADER.txt", "r");
     if(!debugStdin)
@@ -76,18 +128,18 @@ int main(int argc, char *argv[]) {
     service(debugStdin, stdout, "./docroot");
   }
 
-  if(test_mode) {
+  if(global_test_mode) {
     service(stdin, stdout, "./docroot");
   }
 
-  if(!(debug_mode || test_mode)) {
+  if(!(global_debug_mode || global_test_mode)) {
     install_signal_handlers();
 
     int server_fd;
     server_fd = listen_socket("8888");
-
     printf("webserer listen on %d\n", 8888);
     fflush(stdout);
+    become_daemon();
 
     listen_request(server_fd, "./docroot");
   }
