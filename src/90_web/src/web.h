@@ -63,6 +63,7 @@ enum ERROR_CODE {
 };
 
 // util.c
+void logging(char *fmt, ...);
 void log_exit(int exitCode, char *fmt, ...);
 void *xmalloc(size_t sz);
 void upcase(char *str);
