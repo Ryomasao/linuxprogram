@@ -1,6 +1,6 @@
 #include "web.h"
 
-void log_exit(int exitCode, char *fmt, ...) {
+void logging(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
 
@@ -10,6 +10,13 @@ void log_exit(int exitCode, char *fmt, ...) {
   } else {
     vsyslog(LOG_ERR, fmt, ap);
   }
+  va_end(ap);
+}
+
+void log_exit(int exitCode, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  logging(fmt, ap);
   va_end(ap);
   exit(exitCode);
 }

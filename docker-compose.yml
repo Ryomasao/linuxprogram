@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 services:
   main:
     build: .
@@ -10,3 +10,19 @@ services:
     security_opt:
       # gdb実行時に右記のエラーがでるため: Error disabling address space randomization
       - seccomp:unconfined
+    # この指定であってそうなんだけど、docker psで確認してみると、マッピングできてなかった。起動時に -p 8888:8888を指定してる。
+    # runで起動したコンテナの場合、 -pか--service-portsオプションをつけなきゃいけないみたい。
+    # 後述のcommandも実行させるために、docker-compose up でコンテナを起動させたほうがよさそう。
+    # runとupの違いを忘れた。
+    # https://qiita.com/sekitaka_1214/items/3b5cfdd15fafb74789fa
+    ports:
+      - "8888:8888"
+    # centos7でのログ管理はjournaldと呼ばれるサービスが行なっているとのこと。
+    # cのsyslogで出力したログもそこに送られる。
+    # ちょっと確認が足りてないんだけど、コンテナにprivileged権限と起動時に/sbin/initを実行しないと
+    # journaldが動いてくれてないかも。
+    # logの実体は。/run/log/journal配下にあるんだけど、これはバイナリで、journactlコマンドを介してログの内容を確認することができる。
+    # コマンドの内容は以下の記事が参考になった。
+    # https://yomon.hatenablog.com/entry/2016/05/24/192046
+    privileged: true
+    command: /sbin/init

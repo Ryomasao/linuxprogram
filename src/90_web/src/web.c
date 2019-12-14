@@ -76,8 +76,14 @@ static void become_daemon() {
 }
 
 static void install_signal_handlers() {
+  // 本家のhttpd2をみると、SIGPIPEのシグナルキャッチ処理が消えてる
+  // なんでだろう
+
+  // 代わりに子プロセスがゾンビにならないように、以下のコードが追加されている
+  // TODO ゾンビプロセスの処理
+
   // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
-  trap_signal(SIGPIPE, signal_exit);
+  // trap_signal(SIGPIPE, signal_exit);
 }
 
 static void signal_exit(int sig) {
