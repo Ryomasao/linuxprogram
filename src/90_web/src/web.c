@@ -12,6 +12,8 @@ static void service(FILE *in, FILE *out, char *docroot);
 static void listen_request(int server_fd, char *docroot);
 static int listen_socket(char *port);
 static void become_daemon();
+static void detach_children();
+static void noop_handler(int sig);
 
 // vscodeでのdebugを想定
 int global_debug_mode = 0;
@@ -76,15 +78,40 @@ static void become_daemon() {
 }
 
 static void install_signal_handlers() {
-  // 本家のhttpd2をみると、SIGPIPEのシグナルキャッチ処理が消えてる
-  // なんでだろう
+  // 本家のhttpd2をみると、SIGPIPEのシグナルキャッチ処理がSIGTERMに変わってる
+  // クライアントからリクエストがきて、リクエストを処理している間にクライアントから切断された場合に発生するのかなと思ったけれども
+  // SIGPIPEの発生条件は違うのかしら。
+  // よく読むと、xinetdから起動した場合にソケットが切断されると、って書いてあった。
+  trap_signal(SIGTERM, signal_exit);
 
-  // 代わりに子プロセスがゾンビにならないように、以下のコードが追加されている
-  // TODO ゾンビプロセスの処理
-
-  // コネクションが切断された後のsocketにwriteを行うと、SIGPIPEが発生するとのこと
-  // trap_signal(SIGPIPE, signal_exit);
+  // ゾンビプロセスが発生しないようにする処理
+  detach_children();
 }
+
+static void detach_children() {
+  // ゾンビプロセスを回避する方法としては、子プロセスが終了する際に発生するシグナルSIGCHLDをキャッチして
+  // そのタイミングでwaitする方法と、そもそも俺は子プロセスをwaitしないんだよ！ってカーネルに伝える方法がある。
+  // 前者
+  //  正統派。ただし、複数の子プロセスが同時にSIGCHLDだした場合の制御をちゃんと行う必要があるかも。
+  // 　というのもシグナル処理中に発生したシグナルは無視されるという仕様があるっぽい。(未検証)
+  //  https://www.ipa.go.jp/security/awareness/vendor/programmingv1/b07_04_main.html
+  // 後者
+  //  楽そう。ただし、waitは使えなくなる。
+  //
+  // 今回は、本家に従い後者で実装する。
+
+  struct sigaction act;
+  act.sa_handler = noop_handler;
+  sigemptyset(&act.sa_mask);
+  // flagsの値は、ビットで定義されているのでビットの論理和の結果がセットされる。
+  act.sa_flags = SA_RESTART | SA_NOCLDWAIT;
+  if(sigaction(SIGCHLD, &act, NULL) < 0) {
+    log_exit(ERROR_SIGACTION_FAILED, "sigaction() failed: %s", strerror(errno));
+  }
+}
+
+// 何もしない関数
+static void noop_handler(int sig) { ; }
 
 static void signal_exit(int sig) {
   //
