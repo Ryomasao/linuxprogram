@@ -191,3 +191,54 @@ $ gdb httpd
 ```
 debuginfo-install expat-2.1.0-10.el7_3.x86_64 glibc-2.17-292.el7.x86_64 nss-softokn-freebl-3.44.0-5.el7.x86_64 pcre-8.32-17.el7.x86_64
 ```
+
+気を取り直して再度。
+
+```
+$ gdb httpd
+# breakpointoをエントリーポイントに設定
+> b main
+> run
+```
+
+現在のプロセスの ID を表示する。
+
+```
+info proc
+```
+
+```
+main.c
+  config.c
+    これがなんなのかわからない
+    AP_IMPLEMENT_HOOK_RUN_ALL
+```
+
+## Apache モジュールを試しに作成する
+
+hook 処理を理解するためにまずは使ってみよう。
+https://blog.asial.co.jp/715
+
+```sh
+# モジュールを作るツールのapxsはperlでできてるっぽいので、perlをインストールする。
+$ yum install -y perl
+```
+
+```sh
+$ cd /usr/local/apache2/bin
+$ vi apxs
+```
+
+apxs のシバンにインストールした perl のパスを指定する
+
+```sh
+#!/usr/bin/perl -w
+```
+
+```
+$ ./apxs
+```
+
+## hook 処理
+
+http://dev.ariel-networks.com/articles/webdb-vol35/webdb-vol35/
