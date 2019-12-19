@@ -236,7 +236,23 @@ apxs のシバンにインストールした perl のパスを指定する
 ```
 
 ```
-$ ./apxs
+$ ./apxs -g -n hello_world
+```
+
+作成された`hello_world`に移動して以下を実行すると、`mod_hello_world.so`が作成される。
+
+```
+$ make
+$ make install
+```
+
+`httpd.conf`に以下を追加して、localhost/hello にアクセスすると、追加した`hello_world`モジュールが実行される。
+
+```
+LoadModule hello_world_module modules/mod_hello_world.so
+<Location /hello>
+  SetHandler hello_world
+</Location>
 ```
 
 ## hook 処理
