@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 //　実践Cプログラムの無限配列を実装する
 // バケツの中に配列があって、配列に収まりきらない場合、次のバケツの配列へ格納する機能。
 
@@ -6,21 +9,21 @@
 // ひとつのバケツ
 typedef struct bucket {
   // 配列に格納するデータ
-  int data[BLOCK_SIZE];
+  int *data;
   // 次のバケツへのリンク
-  bucket *next;
+  struct bucket *next;
 
 } bucket;
 
+// バケツの設定を行う
+void ah_init_bucket();
+// index指定箇所にvalueを格納する
+void ah_store_item(int index, int value);
+// indexに格納されている値を取得する
+int ah_get_item(int index);
+// バケツの中身をすべて表示する
+void ah_print_bucket();
+
 // indexから、どのバケツにいるのかを判断し、対象のバケツへのポインタを返却する
-static bucket *ah_locate(bucket *bucket, int index);
-
-// 最初のバケツを確保して返却する
-bucket *init_bucket();
-
-// 指定したindexにvalueを格納する
-// 成功した場合0を、失敗した場合-1を返却する
-int store_item(int value, int index);
-
-// indexに格納されている値を取得して返却する
-int get_item(int index);
+static bucket *ah_locate(int index);
+static bucket *create_bucket();
