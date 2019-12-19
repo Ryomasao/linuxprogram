@@ -28,6 +28,18 @@
       //"preLaunchTask": "build 9cc",
       "externalConsole": false,
       "MIMode": "lldb"
+    },
+    {
+      "name": "ah_debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/70_data_model/71_ah/src/ah",
+      "args": ["../src/90_web/src/web.c"],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/src/70_data_model/71_ah/src",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
     }
   ]
 }
