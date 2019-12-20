@@ -255,9 +255,87 @@ LoadModule hello_world_module modules/mod_hello_world.so
 </Location>
 ```
 
-## hook 処理
+## コードを読む
 
 http://dev.ariel-networks.com/articles/webdb-vol35/webdb-vol35/
 
 Apache のソースコードは、マクロが頻繁につかわれているので初見だときつい。
 マクロをまずは展開させることにする。
+
+プリコンパイルだけ行うことで、マクロが展開される。
+
+```
+$ cd server
+$ rm main.o
+$ make main.0
+↑で出力された内容の-cを-Eに変更して標準出力に適当なファイル名を指定して実行。
+```
+
+### Apache モジュールを読み込む仕組みを探る
+
+main.c L485
+
+```c
+  error = ap_setup_prelinked_modules(process);
+```
+
+ここで事前にリンク済みのモジュールの設定を行なっている。
+
+config.c
+
+```c
+     *  Initialise total_modules variable and module indices
+     */
+    total_modules = 0;
+    for (m = ap_preloaded_modules; *m != NULL; m++)
+        (*m)->module_index = total_modules++;
+
+    max_modules = total_modules + DYNAMIC_MODULE_LIMIT + 1;
+    conf_vector_length = max_modules;
+```
+
+`ap_preloaded_modules`変数は、どこで設定してんだろ？と調べた。
+
+modules.c で prelink するモジュールが定義されている。
+グローバルスコープで定義されているので、main 関数実行より前に設定が終わっていることになる。
+
+```c
+module *ap_preloaded_modules[] = {
+  &core_module,
+  &so_module,
+  &http_module,
+  &mpm_event_module,
+  NULL
+};
+```
+
+`core_module`等はどこからきているのだろうか。
+→`mpm_event_module`でいえば`event.c`の最下部に以下のマクロがある。
+
+```c
+AP_DECLARE_MODULE(mpm_event) = {
+    MPM20_MODULE_STUFF,
+    NULL,                       /* hook to run before apache parses args */
+    NULL,                       /* create per-directory config structure */
+    NULL,                       /* merge per-directory config structures */
+    NULL,                       /* create per-server config structure */
+    NULL,                       /* merge per-server config structures */
+    event_cmds,                 /* command apr_table_t */
+    event_hooks                 /* register_hooks */
+};
+```
+
+これを展開すると、以下の設定が現れる。
+
+```c
+module mpm_event_module = {
+    20120211, 88, -1, "event.c", ((void *)0), ((void *)0), 0x41503234UL,
+    ((void *)0),
+    ((void *)0),
+    ((void *)0),
+    ((void *)0),
+    ((void *)0),
+    event_cmds,
+    event_hooks
+};
+```

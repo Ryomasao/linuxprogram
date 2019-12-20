@@ -5,6 +5,12 @@
     "fcntl.h": "c",
     "__hash_table": "cpp",
     "unordered_map": "cpp",
-    "hashtable": "cpp"
+    "hashtable": "cpp",
+    "http_config.h": "c",
+    "http_core.h": "c",
+    "http_protocol.h": "c",
+    "httpd.h": "c",
+    "util_filter.h": "c",
+    "http_request.h": "c"
   }
 }
