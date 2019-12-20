@@ -258,3 +258,6 @@ LoadModule hello_world_module modules/mod_hello_world.so
 ## hook 処理
 
 http://dev.ariel-networks.com/articles/webdb-vol35/webdb-vol35/
+
+Apache のソースコードは、マクロが頻繁につかわれているので初見だときつい。
+マクロをまずは展開させることにする。
