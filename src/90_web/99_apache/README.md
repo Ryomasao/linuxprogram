@@ -339,3 +339,37 @@ module mpm_event_module = {
     event_hooks
 };
 ```
+
+### CGI
+
+`mod_cgi`と`mod_cgid`についてのパフォーマンス。
+https://hb.matsumoto-r.jp/entry/2014/09/11/025533
+
+#### mod_cgi
+
+`mod_cgi`をまずはみてみる。
+prefork したプロセスが cgi を実行してくれる？
+まずは cgi を有効にする。と思ったが、`modules`配下には`mod_cgid`しかなくって`mod_cgi`がない。
+どうもデフォルトの設定では`mod_cgid`が用意されているっぽい。
+
+Apache のソースコードに`mod_cgi.c`はいるけど、同じディレクトリの Makefile には、`mod_cgi`の定義が見当たらなかった。
+なので、ビルドの設定をかえてみる。
+
+```sh
+# defaultは--enable-cgidになってるっぽ
+./configure --enable-cgi
+```
+
+上記を実行してみてみたところ、Makefile に`mod_cgi`の定義が追加されていることが確認できた。
+`generator`配下で make&make install することで、modules 配下に無事追加された。
+
+続いて、設定を変更する。
+http.conf
+
+```
+# モジュールを読み込んで
+LoadModule cgid_module modules/mod_cgi.so
+# cgiを実行するようにする
+```
+
+### たまに読み返す
