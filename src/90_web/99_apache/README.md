@@ -340,6 +340,131 @@ module mpm_event_module = {
 };
 ```
 
+一方、モジュールにリンクされていないものは以下の関数実行時に読み込まれていそう。
+main.c L630
+
+```c
+  ap_server_conf = ap_read_config(process, ptemp, confname, &ap_conftree);
+```
+
+以下で、`httpd.conf`の内容をパースしてる。
+config.c L2335
+
+```c
+    error = ap_process_resource_config(s, confname, conftree, p, ptemp);
+```
+
+process_command_config→ap_process_resource_config→ap_build_config
+
+`httpd.conf`の内容を 1 行ずつ'vb'に読み込み、ap_build_config_sub で処理している。`ap_direcive_t`構造体にパースした値をつっこんでいくんだけど、その過程で、モジュールのダイナミックロードもやってる。
+
+config.c L1422
+
+```c
+    while ((rc = ap_varbuf_cfg_getline(&vb, parms->config_file, max_len))
+           == APR_SUCCESS) {
+        errmsg = ap_build_config_sub(p, temp_pool, vb.buf, parms,
+                                     &current, &curr_parent, conftree);
+
+```
+
+config.c L1160
+
+```c
+
+    if ((cmd = ap_find_command_in_modules(cmd_name, &mod)) != NULL) {
+        newdir->directive = cmd->name;
+
+        if (cmd->req_override & EXEC_ON_READ) {
+            ap_directive_t *sub_tree = NULL;
+
+            parms->err_directive = newdir;
+            retval = execute_now(cmd_name, args, parms, p, temp_pool,
+                                 &sub_tree, *curr_parent);
+```
+
+cmd には、httpd.conf でパースしたコマンドが設定される
+以下の行を処理している最中であれば、以下の値が設定される。
+LoadModule authn_file_module modules/mod_authn_file.so
+
+cmd: LoadModule
+args: authn_file_module modules/mod_authn_file.so
+
+ap_find_command_in_modules は、LoadModule のようなコマンドが、既に登録されているモジュールに存在しているかを確認している。
+LoadModule は Apache に事前に含まれる mod_so.c のコマンドとして登録されている。
+
+以下の定義。
+mod_so.c L426
+
+```c
+static const command_rec so_cmds[] = {
+    AP_INIT_TAKE2("LoadModule", load_module, NULL, RSRC_CONF | EXEC_ON_READ,
+      "a module name and the name of a shared object file to load it from"),
+    AP_INIT_ITERATE("LoadFile", load_file, NULL, RSRC_CONF  | EXEC_ON_READ,
+      "shared object file or library to load into the server at runtime"),
+    { NULL }
+};
+
+```
+
+そして、コマンドの種類が`EXEC_ON_READ`の場合、この設定ファイルを読む段階で、コマンドの実行を、`execute_now`関数で行う。
+
+```c
+static const char *execute_now(char *cmd_line, const char *args,
+                               cmd_parms *parms,
+                               apr_pool_t *p, apr_pool_t *ptemp,
+                               ap_directive_t **sub_tree,
+                               ap_directive_t *parent)
+{
+    const command_rec *cmd;
+    ap_mod_list *ml;
+
+    // cmd_lineは、LoadModule
+    // apr_psrtdupはtemp->poolに文字列LoadModuleをつっこんでその参照をdirに返す
+    char *dir = apr_pstrdup(parms->temp_pool, cmd_line);
+
+    ap_str_tolower(dir);
+
+    // これがあんまよくわかってない。dirに設定された文字列LoadModuleをkeyに、ハッシュテーブルを検索？してる
+    // これにより、コマンドLoadModuleを持つmoduleのリストが返却されるっぽい
+    // ここでは、 so_cmds ※mod_soのコマンドテーブルの名前が設定される
+    ml = apr_hash_get(ap_config_hash, dir, APR_HASH_KEY_STRING);
+
+    if (ml == NULL) {
+        return apr_pstrcat(parms->pool, "Invalid command '",
+                           cmd_line,
+                           "', perhaps misspelled or defined by a module "
+                           "not included in the server configuration",
+                           NULL);
+    }
+
+    for ( ; ml != NULL; ml = ml->next) {
+        const char *retval;
+        cmd = ml->cmd;
+
+        // ほんで、ここでそのコマンドが実行される
+        retval = invoke_cmd(cmd, parms, sub_tree, args);
+
+        if (retval != NULL) {
+            return retval;
+        }
+    }
+
+    return NULL;
+}
+```
+
+`invoke_cmd`内でさきほどの定義に書かれている、mod_so.c の load_module 関数が呼ばれる。
+mod_so.c L426
+
+```c
+static const command_rec so_cmds[] = {
+    AP_INIT_TAKE2("LoadModule", load_module, NULL, RSRC_CONF | EXEC_ON_READ,
+      "a module name and the name of a shared object file to load it from"),
+};
+
+```
+
 ### CGI
 
 `mod_cgi`と`mod_cgid`についてのパフォーマンス。
@@ -371,5 +496,3 @@ http.conf
 LoadModule cgid_module modules/mod_cgi.so
 # cgiを実行するようにする
 ```
-
-### たまに読み返す

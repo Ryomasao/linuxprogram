@@ -11,6 +11,8 @@
     "http_protocol.h": "c",
     "httpd.h": "c",
     "util_filter.h": "c",
-    "http_request.h": "c"
+    "http_request.h": "c",
+    "ap_config.h": "c",
+    "apr_lib.h": "c"
   }
 }
