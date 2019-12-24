@@ -465,6 +465,41 @@ static const command_rec so_cmds[] = {
 
 ```
 
+`invoke_cmd`を辿っていくと、`dlopen`にたどり着く。
+
+dso.c はマクロがいっぱい書いてあるので、プロプロセッサだけ実行してみたほうがわかりやすい。
+
+```c
+APR_DECLARE(apr_status_t) apr_dso_load(apr_dso_handle_t **res_handle,
+                                       const char *path, apr_pool_t *ctx)
+{
+    void *os_handle = dlopen((char *)path, RTLD_NOW | RTLD_GLOBAL);
+
+    *res_handle = apr_pcalloc(ctx, sizeof(*res_handle));
+
+    if(os_handle == NULL) {
+        (*res_handle)->errormsg = dlerror();
+        return APR_EDSOOPEN;
+    }
+
+    (*res_handle)->handle = (void*)os_handle;
+    (*res_handle)->pool = ctx;
+    (*res_handle)->errormsg = NULL;
+
+    apr_pool_cleanup_register(ctx, *res_handle, dso_cleanup, apr_pool_cleanup_null);
+
+    return APR_SUCCESS;
+}
+```
+
+`dlopen`のソースコードみてみたいんだけど、ソースコードをどうみればいいのかがまだよくわかってない。
+調べてわかた t ことは`dlopen`は man 3 ででてくるので、C 標準？ライブラリと思っていいはず。
+システムコールを伴わずに呼び出しができるんだ。
+
+以下に、動作の記事があったので、ソースコードが読めたらみてみよう。
+
+https://www.ibm.com/developerworks/jp/linux/library/l-dynamic-libraries/index.html
+
 ### CGI
 
 `mod_cgi`と`mod_cgid`についてのパフォーマンス。
