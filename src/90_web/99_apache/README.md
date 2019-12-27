@@ -121,6 +121,13 @@ LoadModule mpm_prefork_module modules/mod_mpm_prefork.so
 Include conf/extra/httpd-mpm.conf
 ```
 
+`httpd.conf`を git で管理するため、conf の場所を変更する。
+
+```
+$ cd /usr/local/apache2/conf
+$ ln -s /data/src/90_web/99_apache/conf/httpd.conf httpd.conf
+```
+
 ## 動作確認
 
 ```
@@ -271,7 +278,7 @@ $ make main.0
 ↑で出力された内容の-cを-Eに変更して標準出力に適当なファイル名を指定して実行。
 ```
 
-### Apache モジュールを読み込む仕組みを探る
+### Apache でモジュールを読み込む仕組みを探る
 
 main.c L485
 
@@ -500,12 +507,182 @@ APR_DECLARE(apr_status_t) apr_dso_load(apr_dso_handle_t **res_handle,
 
 https://www.ibm.com/developerworks/jp/linux/library/l-dynamic-libraries/index.html
 
-### CGI
+以下にメモを書いた。
+src/90_web/95_ld/dlopen/README.md
+
+## Apache Hook について
+
+各モジュールでは、以下のように module 構造体が定義されている。
+
+```c
+module AP_MODULE_DECLARE_DATA hello_world_module = {
+    STANDARD20_MODULE_STUFF,
+    NULL,                  /* create per-dir    config structures */
+    NULL,                  /* merge  per-dir    config structures */
+    NULL,                  /* create per-server config structures */
+    NULL,                  /* merge  per-server config structures */
+    NULL,                  /* table of config file commands       */
+    hello_world_register_hooks  /* register hooks                      */
+};
+```
+
+一番最後の register_hooks で、このモジュールがやる処理を書いていく。
+
+`ap_hook_処理タイミング`の関数で、その処理タイミングで行う関数をセットする。
+以下は、handler が処理されるタイミングで、`hello_world_handler`を呼ぶことになる。
+
+```
+static void hello_world_register_hooks(apr_pool_t *p)
+{
+    ap_hook_handler(hello_world_handler, NULL, NULL, APR_HOOK_MIDDLE);
+}
+```
+
+処理タイミングには、以下のようにいろんなタイミングがある。
+http://ohgrkrs-blog.blogspot.com/2014/06/blog-post_16.html
+
+登録された hook は Apache 側で、以下のように`ap_run_pre_config`のように実行される。
+main.c L651
+
+```c
+  if(ap_run_pre_config(pconf, plog, ptemp) != OK) {
+    ap_log_error(APLOG_MARK, APLOG_STARTUP | APLOG_ERR, 0, NULL,
+                 APLOGNO(00013) "Pre-configuration failed");
+    destroy_and_exit_process(process, 1);
+  }
+```
+
+※ DSO の機能は、mod_so.c 内の処理で実行されてたけど、hook の仕組みではないと思う。
+
+HOOK の実態は、`config.c`のグローバルで定義されている構造体。
+
+```c
+APR_HOOK_STRUCT(
+           APR_HOOK_LINK(header_parser)
+           APR_HOOK_LINK(pre_config)
+           APR_HOOK_LINK(check_config)
+           APR_HOOK_LINK(post_config)
+           APR_HOOK_LINK(open_logs)
+           APR_HOOK_LINK(child_init)
+           APR_HOOK_LINK(handler)
+           APR_HOOK_LINK(quick_handler)
+           APR_HOOK_LINK(optional_fn_retrieve)
+           APR_HOOK_LINK(test_config)
+           APR_HOOK_LINK(open_htaccess)
+)
+
+// ↑のマクロを展開するとこんな感じ。
+static struct {
+  apr_array_header_t *link_header_parser;
+  apr_array_header_t *link_pre_config;
+  apr_array_header_t *link_check_config;
+  apr_array_header_t *link_post_config;
+  apr_array_header_t *link_open_logs;
+  apr_array_header_t *link_child_init;
+  apr_array_header_t *link_handler;
+  apr_array_header_t *link_quick_handler;
+  apr_array_header_t *link_optional_fn_retrieve;
+  apr_array_header_t *link_test_config;
+  apr_array_header_t *link_open_htaccess;
+} _hooks;
+```
+
+こちらも`config.c`のマクロを展開したもの。以下のように\_hooks 構造体に、登録していることが確認できる。
+
+```c
+void ap_hook_pre_config(ap_HOOK_pre_config_t *pf, const char *const *aszPre,
+                        const char *const *aszSucc, int nOrder) {
+  ap_LINK_pre_config_t *pHook;
+  if(!_hooks.link_pre_config) {
+    _hooks.link_pre_config = apr_array_make(apr_hook_global_pool, 1, sizeof(ap_LINK_pre_config_t));
+    apr_hook_sort_register("pre_config", &_hooks.link_pre_config);
+  }
+  pHook = apr_array_push(_hooks.link_pre_config);
+  pHook->pFunc = pf;
+  pHook->aszPredecessors = aszPre;
+  pHook->aszSuccessors = aszSucc;
+  pHook->nOrder = nOrder;
+  pHook->szName = apr_hook_debug_current;
+```
+
+よくわかってないのが、同じ hook を 2 回実行していること。
+コメントでちゃんと書いてあるね。
+
+L619
+
+```
+  /* Note that we preflight the config file once
+   * before reading it _again_ in the main loop.
+   * This allows things, log files configuration
+   * for example, to settle down.
+   */
+```
+
+メインループでも config を見るんだけど、その前に一回読むよ。
+これによって、ログ設定とかうまいこといくよ的な感じ？
+どういうこっちゃ。
+
+まじかと思うのが prefork の動き。
+prefork は pre_config の hook で登録されているので、上記の 2 回 hook 実行される流れで、2 回 fork することにならないかなと思った。
+prefork の動きをみると、2 回目に実行されたときに実際に fork するっていう処理になってる。
+
+prefork.c L1263
+
+```c
+    /* sigh, want this only the second time around */
+    if (retained->mpm->module_loads == 2) {
+        if (!one_process && !foreground) {
+            /* before we detach, setup crash handlers to log to errorlog */
+            ap_fatal_signal_setup(ap_server_conf, pconf);
+            rv = apr_proc_detach(no_detach ? APR_PROC_DETACH_FOREGROUND
+```
+
+### prefork をもう少し
+
+以下で fork 処理を行なっている。
+これが prefork 処理なのかなとおもったけど、httpd.conf で設定した数分 prefork する等の処理が見受けられない。
+おそらく、デーモン化するための事前処理と捉えていいのだろうか？
+
+prefork.c L 1262
+
+```c
+    if (retained->mpm->module_loads == 2) {
+        if (!one_process && !foreground) {
+            /* before we detach, setup crash handlers to log to errorlog */
+            ap_fatal_signal_setup(ap_server_conf, pconf);
+            rv = apr_proc_detach(no_detach ? APR_PROC_DETACH_FOREGROUND
+```
+
+fork したプロセスを gdb で追っかけるには、以下の設定を行う。
+
+```sh
+(gdb) set follow-fork-mode child
+# preforkする箇所でbreakpoint
+# 前述の通り1回目はただスルーして、2回目にフォーク処理が走る
+(gdb) b prefork_pre_config
+```
+
+```c
+static struct {
+  apr_array_header_t *link_monitor;
+  apr_array_header_t *link_drop_privileges;
+  apr_array_header_t *link_mpm;
+  apr_array_header_t *link_mpm_query;
+  apr_array_header_t *link_mpm_register_timed_callback;
+  apr_array_header_t *link_mpm_get_name;
+  apr_array_header_t *link_end_generation;
+  apr_array_header_t *link_child_status;
+  apr_array_header_t *link_suspend_connection;
+  apr_array_header_t *link_resume_connection;
+} _hooks;
+```
+
+## CGI
 
 `mod_cgi`と`mod_cgid`についてのパフォーマンス。
 https://hb.matsumoto-r.jp/entry/2014/09/11/025533
 
-#### mod_cgi
+### mod_cgi
 
 `mod_cgi`をまずはみてみる。
 prefork したプロセスが cgi を実行してくれる？
@@ -528,6 +705,6 @@ http.conf
 
 ```
 # モジュールを読み込んで
-LoadModule cgid_module modules/mod_cgi.so
+LoadModule cgi_module modules/mod_cgi.so
 # cgiを実行するようにする
 ```

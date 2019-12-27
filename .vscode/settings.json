@@ -13,6 +13,7 @@
     "util_filter.h": "c",
     "http_request.h": "c",
     "ap_config.h": "c",
-    "apr_lib.h": "c"
+    "apr_lib.h": "c",
+    "mod_core.h": "c"
   }
 }
