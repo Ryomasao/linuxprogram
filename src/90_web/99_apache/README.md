@@ -66,9 +66,10 @@ xml/apr_xml.c:35:19: fatal error: expat.h: No such file or directory
 https://blog.apar.jp/linux/7655/
 
 `expat-devel`が必要とのことなので、インストールする。
+また、Apache 本体でも perl が必要になるので`pcre-devel`を導入する。
 
 ```
-$ yum install -y expat-devel
+$ yum install -y expat-devel pcre-devel
 ```
 
 気をとり直して、もっかい。
@@ -274,7 +275,7 @@ Apache のソースコードは、マクロが頻繁につかわれているの�
 ```
 $ cd server
 $ rm main.o
-$ make main.0
+$ make main.o
 ↑で出力された内容の-cを-Eに変更して標準出力に適当なファイル名を指定して実行。
 ```
 
@@ -653,7 +654,7 @@ prefork.c L 1262
             rv = apr_proc_detach(no_detach ? APR_PROC_DETACH_FOREGROUND
 ```
 
-fork したプロセスを gdb で追っかけるには、以下の設定を行う。
+ちなみに fork したプロセスを gdb で追っかけるには、以下の設定を行う。
 
 ```sh
 (gdb) set follow-fork-mode child
@@ -661,6 +662,40 @@ fork したプロセスを gdb で追っかけるには、以下の設定を行�
 # 前述の通り1回目はただスルーして、2回目にフォーク処理が走る
 (gdb) b prefork_pre_config
 ```
+
+実際に Aapache の子プロセスとして fork を行う箇所は、以下の箇所だと思う。
+
+main.c L819
+
+```c
+        rc = ap_run_mpm(pconf, plog, ap_server_conf);
+```
+
+上記関数は、mpm_common.c をプリコンパイルすると発見できる。
+また`_hooks`構造体がでてきてる。
+
+```c
+int ap_run_mpm(apr_pool_t *pconf, apr_pool_t *plog, server_rec *s) {
+  ap_LINK_mpm_t *pHook;
+  int n;
+  int rv = -1;
+  ;
+  ;
+  if(_hooks.link_mpm) {
+    pHook = (ap_LINK_mpm_t *)_hooks.link_mpm->elts;
+    for(n = 0; n < _hooks.link_mpm->nelts; ++n) {
+      ;
+      rv = pHook[n].pFunc(pconf, plog, s);
+      ;
+      if(rv != -1)
+        break;
+    }
+  };
+  return rv;
+}
+```
+
+`_hooks`構造体は、config.c ででてきたものと違って、mpm 用のものっぽい。
 
 ```c
 static struct {
@@ -676,6 +711,43 @@ static struct {
   apr_array_header_t *link_resume_connection;
 } _hooks;
 ```
+
+ひとまずデバックで実行を追っていくと、最初に以下が実行される。
+
+prefork.c L843
+
+```c
+static int prefork_run(apr_pool_t *_pconf, apr_pool_t *plog, server_rec *s)
+```
+
+このコードをみるとめっちゃ複雑。
+`run -X`の実際に fork しないバージョンで実行していくと、make_child→child_main と来て、以下の箇所で socket の待ち受けをしてるっぽいことがわかった。
+
+prefork.c L589
+
+```c
+    got_fd:
+        /* if we accept() something we don't want to die, so we have to
+         * defer the exit
+         */
+        status = lr->accept_func(&csd, lr, ptrans);
+```
+
+この状態で、Apache にアクセスしてみると、デバック処理が進む。
+実際にリクエストを処理しているのが、 `ap_process_connection`だと思われる。
+
+prefork.c L 610
+
+```c
+        current_conn = ap_run_create_connection(ptrans, ap_server_conf, csd, my_child_num, sbh, bucket_alloc);
+        if (current_conn) {
+#if APR_HAS_THREADS
+            current_conn->current_thread = thd;
+#endif
+            ap_process_connection(current_conn, csd);
+```
+
+CGI 実行の過程までこれを追っかけてみよう。
 
 ## CGI
 
@@ -708,3 +780,23 @@ http.conf
 LoadModule cgi_module modules/mod_cgi.so
 # cgiを実行するようにする
 ```
+
+CGI の実行は、デフォルトで以下の設定になっていたのでそのままにしとく
+
+```
+<IfModule alias_module>
+    # /cgi-binにアクセスした場合、サーバーの/usr/local/apache2/cgi-binをドキュメントルートとして公開する
+    ScriptAlias /cgi-bin/ "/usr/local/apache2/cgi-bin/"
+</IfModule>
+```
+
+上記に加えて、`/usr/local/apache2/cgi-bin`の中にデフォルトでおいてある`test-cgi`に実行権限を与える。
+中身を開くと、1 行目にシバングをつけてねとあるので、これも編集しとく。
+
+```sh
+#!/usr/bin/bash
+
+省略
+```
+
+Apache を再起動して、`localhost:8888/cgi-bin/test-cgi`にアクセスすると test-cgi の実行結果がレスポンスボディに含まれることが確認できた。

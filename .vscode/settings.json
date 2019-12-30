@@ -14,6 +14,9 @@
     "http_request.h": "c",
     "ap_config.h": "c",
     "apr_lib.h": "c",
-    "mod_core.h": "c"
-  }
+    "mod_core.h": "c",
+    "apr_general.h": "c"
+  },
+  // Apache soruceコードをgitignoreで対象外にすると、Command + Pのファイル検索対象外になるので、追加する
+  "search.useIgnoreFiles": false
 }
