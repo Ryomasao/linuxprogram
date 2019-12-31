@@ -129,6 +129,14 @@ $ cd /usr/local/apache2/conf
 $ ln -s /data/src/90_web/99_apache/conf/httpd.conf httpd.conf
 ```
 
+また、gdb と src でいったりきたりするので alias をはっとく。
+
+```sh
+alias gdbap='gdb /usr/local/apache2/bin/httpd'
+alias ap='cd /usr/local/apache2/bin'
+alias src='cd /data/src/90_web/99_apache
+```
+
 ## 動作確認
 
 ```
@@ -501,7 +509,7 @@ APR_DECLARE(apr_status_t) apr_dso_load(apr_dso_handle_t **res_handle,
 ```
 
 `dlopen`のソースコードみてみたいんだけど、ソースコードをどうみればいいのかがまだよくわかってない。
-調べてわかた t ことは`dlopen`は man 3 ででてくるので、C 標準？ライブラリと思っていいはず。
+調べてわかったことは`dlopen`は man 3 ででてくるので、C 標準？ライブラリと思っていいはず。
 システムコールを伴わずに呼び出しができるんだ。
 
 以下に、動作の記事があったので、ソースコードが読めたらみてみよう。
@@ -712,6 +720,33 @@ static struct {
 } _hooks;
 ```
 
+上記の hook は、以下で登録されている。
+
+prefork.c L 1403
+
+```c
+static void prefork_hooks(apr_pool_t *p)
+{
+    /* Our open_logs hook function must run before the core's, or stderr
+     * will be redirected to a file, and the messages won't print to the
+     * console.
+     */
+    static const char *const aszSucc[] = {"core.c", NULL};
+
+    ap_hook_open_logs(prefork_open_logs, NULL, aszSucc, APR_HOOK_REALLY_FIRST);
+    /* we need to set the MPM state before other pre-config hooks use MPM query
+     * to retrieve it, so register as REALLY_FIRST
+     */
+    ap_hook_pre_config(prefork_pre_config, NULL, NULL, APR_HOOK_REALLY_FIRST);
+    ap_hook_check_config(prefork_check_config, NULL, NULL, APR_HOOK_MIDDLE);
+    // このへんから
+    ap_hook_mpm(prefork_run, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_mpm_query(prefork_query, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_mpm_get_name(prefork_get_name, NULL, NULL, APR_HOOK_MIDDLE);
+}
+
+```
+
 ひとまずデバックで実行を追っていくと、最初に以下が実行される。
 
 prefork.c L843
@@ -730,11 +765,12 @@ prefork.c L589
         /* if we accept() something we don't want to die, so we have to
          * defer the exit
          */
+        // csdにはsocketにつながったファイルディスクリプタが設定される
         status = lr->accept_func(&csd, lr, ptrans);
 ```
 
 この状態で、Apache にアクセスしてみると、デバック処理が進む。
-実際にリクエストを処理しているのが、 `ap_process_connection`だと思われる。
+実際にリクエストを処理しているのが、 `ap_run_create_connection`,`ap_process_connection`だと思われる。
 
 prefork.c L 610
 
@@ -747,14 +783,78 @@ prefork.c L 610
             ap_process_connection(current_conn, csd);
 ```
 
-CGI 実行の過程までこれを追っかけてみよう。
+上記の ap から始まるものは大抵マクロになってる。
+マクロは以下の構成になってることに気づいた。
+
+```c
+// 第1引数は、関数の返り値, 関数名
+// 第2引数は、関数の引数
+// 第3引数は、hookに登録している関数に渡す引数
+AP_IMPLEMENT_HOOK_RUN_FIRST(conn_rec *,create_connection,
+                            (apr_pool_t *p, server_rec *server, apr_socket_t *csd, long conn_id, void *sbh, apr_bucket_alloc_t *alloc),
+                            (p, server, csd, conn_id, sbh, alloc), NULL)
+```
+
+ap_run_create_connection は通常以下が実行される。
+クライアントの IP アドレスとかを取得しているのかしら。ちょっとよくわからない。
+
+core.c L5062
+
+```c
+static conn_rec *core_create_conn(apr_pool_t *ptrans, server_rec *server,
+                                  apr_socket_t *csd, long id, void *sbh,
+                                  apr_bucket_alloc_t *alloc)
+{
+    apr_status_t rv;
+    conn_rec *c = (conn_rec *) apr_pcalloc(ptrans, sizeof(conn_rec));
+```
+
+ap_process_connection はマクロじゃなくって、connection.c に直接関数が書かれている。
+`ap_run_pre_connection`と`ap_run_process_connection`が実行される。
+
+`ap_hook_pre_connection`と`ap_hook_process_connection`で grep すれば、どの hook が登録されているのか確認できる。
+ちょっとわかってきた。
+
+`ap_hook_pre_connection`は、core で socket のタイムアウトの設定とかをしてるっぽいだけなので省略。
+※socket のタイムアウトって一体なんだろう。
+
+メイン処理は、`ap_hook_process_connection`に登録されている、http_core.c の`ap_process_http_connection`になる。
+
+上記をおっていくと、http_request.c の`ap_process_request`にたどり付く。
+
+この中で、モジュール開発をする上で一番さわりそうな handler と filter の処理を行ってる。
+
+handler は以下で処理していて、hello_world モジュールもここで処理されていることがわかる。
+cgi もここでやってる。
+
+http_request.c L453
+
+```c
+            access_status = ap_invoke_handler(r);
+```
+
+gdb でデバック中に、module_hello_world.c がないよっていわれるので、gdb にファイルの場所を教えて上げる必要がある。
+
+```
+(gdb) dir /data/src/90_web/99_apache/hello_world
+```
+
+filter についてはまだ調べてない。
+
+http_request.c L495
+
+```c
+        rv = ap_pass_brigade(c->output_filters, bb);
+```
 
 ## CGI
+
+CGI について調べてみよう。
 
 `mod_cgi`と`mod_cgid`についてのパフォーマンス。
 https://hb.matsumoto-r.jp/entry/2014/09/11/025533
 
-### mod_cgi
+### 基本
 
 `mod_cgi`をまずはみてみる。
 prefork したプロセスが cgi を実行してくれる？
@@ -800,3 +900,22 @@ CGI の実行は、デフォルトで以下の設定になっていたのでそ�
 ```
 
 Apache を再起動して、`localhost:8888/cgi-bin/test-cgi`にアクセスすると test-cgi の実行結果がレスポンスボディに含まれることが確認できた。
+
+### mod_cgi.c を読む
+
+mod_cgi.c は handler として hook を登録している。
+
+これを追っていくと、`apr-1.7.0/threadproc/unix/proc.c`で子プロセスを fork して、execve でプログラムを実行していることがわかった！
+
+proc.c L 562
+
+```c
+        else if (attr->cmdtype == APR_PROGRAM) {
+            if (attr->detached) {
+                apr_proc_detach(APR_PROC_DETACH_DAEMONIZE);
+            }
+
+            execve(progname, (char * const *)args, (char * const *)env);
+```
+
+実行結果をどうやって親プロセスにわたすのかな。
