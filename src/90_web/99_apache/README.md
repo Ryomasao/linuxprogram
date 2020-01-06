@@ -919,3 +919,26 @@ proc.c L 562
 ```
 
 実行結果をどうやって親プロセスにわたすのかな。
+
+### mod_cgid.c を読む
+
+mod_cgid は fastcgi ではないことに気づいた。
+mod_cgi のデーモン版だ。
+https://httpd.apache.org/docs/current/mod/mod_cgid.html
+
+### mod_fcgid.c を読む
+
+mod_fcgid:Apache 公式が提供
+mod_fastcgi:FastCGI という規格を OpenWorks 社？が考案してコードも公開されている。現在 OpenWorks 社はなくなっていて、開発もとまってる？
+仕様の違いは以下に書かれていた。
+https://superuser.com/questions/228173/whats-the-difference-between-mod-fastcgi-and-mod-fcgid
+mod_fastcgi は複数リクエストを捌けるようになっているっぽい。
+
+```sh
+$ wget http://ftp.tsukuba.wide.ad.jp/software/apache//httpd/mod_fcgid/mod_fcgid-2.3.9.tar.gz
+$ tar zxvf mod_fcgid-2.3.9.tar.gz
+$ cd mod_fcgid-2.3.9
+//apacheのutilであるapxsのパスを環境変数に設定する必要がある
+// http://svn.apache.org/repos/asf/httpd/mod_fcgid/trunk/README-FCGID
+$ APXS=/usr/local/apache2/bin/apxs ./configure.apxs
+```
