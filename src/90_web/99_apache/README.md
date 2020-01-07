@@ -942,3 +942,97 @@ $ cd mod_fcgid-2.3.9
 // http://svn.apache.org/repos/asf/httpd/mod_fcgid/trunk/README-FCGID
 $ APXS=/usr/local/apache2/bin/apxs ./configure.apxs
 ```
+
+httpd.conf の設定を、公式ガイドにしたがって設定したら、HTTP エラー 403 でエラーでハマった。
+https://httpd.apache.org/mod_fcgid/mod/mod_fcgid.html
+
+```
+<Directory /usr/local/apache/fcgi-bin/>
+SetHandler fcgid-script
+Options +ExecCGI
+
+# Customize the next two directives for your requirements.
+Order allow,deny
+Allow from all
+</Directory>
+```
+
+ディレクトリのアクセスを許可する指定が上記は 2.2 の指定で古い。`Require all xxx`を使えばいい。
+
+```
+<Directory "/usr/local/apache2/fcgi-bin">
+    SetHandler fcgid-script
+    Require all granted
+</Directory>
+```
+
+エラーになった場合も、error.log にどのモジュールでこけてるかでるから、こっちを先に見るべきだった。
+
+#### フローを追うが、、、
+
+親プロセスから、CGI 用のデーモンプロセスができるまでの流れ。
+prefork とかでも、mpm_event より前にこれやってそうなので、prefork の子のプロセスと、CGI 用デーモンの親は同じだと思う。
+
+```
+mod_fcgid.c
+  ap_hook_pre_config
+    fcgid_init
+      fcgid_pm_unix.c
+        procmgr_post_config
+          create_process_manager
+            apr_proc_fork //ここでfork!
+```
+
+`create_process_manager`の pm_main が CGI 用デーモンのメイン処理
+
+以下は、pm_main 関数の中身
+fcgid_pm_main.c
+
+```c
+        if (procmgr_fetch_cmd(&command, main_server) == APR_SUCCESS) {
+            if (is_spawn_allowed(main_server, &command))
+                fastcgi_spawn(&command, main_server, configpool);
+
+            procmgr_finish_notify(main_server);
+        }
+```
+
+`procmgr_fetch_cmd`を追ってくと、poll()というシステムコールがでてくる！
+
+apr_wait_for_io_or_timeout
+
+```c
+    do {
+        rc = poll(&pfd, 1, timeout);
+    } while (rc == -1 && errno == EINTR);
+    if (rc == 0) {
+        return APR_TIMEUP;
+    }
+    else if (rc > 0) {
+        return APR_SUCCESS;
+    }
+    else {
+        return errno;
+    }
+```
+
+`fastcgi_spawn()`→`proc_spawn_process`→`fcgid_create_privileged_process`
+
+結局 fork している、、、
+
+#### 少し前に進む！
+
+fastcgi は fork をしないんじゃなくって、fork & exec したプロセスをアプリ側で永続化しておく必要があるんだ！
+
+https://fastcgi-archives.github.io/FastCGI_Developers_Kit_FastCGI.html
+
+##### tiny-fcgi.c をつくる
+
+まずは、fast-cgi をささえるライブラリが必要なのでこれをビルドする必要がある。
+サンプルを見ると最小限の箇所は小さそうだから中身終えるかも。
+
+developer kit を落とす
+
+```
+$ wget https://github.com/FastCGI-Archives/FastCGI.com/raw/master/original_snapshot/fcgi-2.4.1-SNAP-0910052249.tar.gz
+```
