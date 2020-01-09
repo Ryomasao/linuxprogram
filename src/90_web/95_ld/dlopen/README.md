@@ -56,11 +56,18 @@ $ldd dl
 	/lib64/ld-linux-x86-64.so.2 (0x00007fa126898000)
 ```
 
-カレントディレクトリを追加をライブラリのパスに追加することで実行することができた。
+カレントディレクトリを共有ライブラリのパスに追加することで実行することができた。
 
 ```
 $export LD_LIBRARY_PATH=./
 ```
+
+共有ライブラリのパスの検索順序
+https://www.wakuwakubank.com/posts/395-linux-ldd-ldconfig/
+
+1. LD_LIBRARY_PATH で設定されている値
+2. /etc/ld.so.cache ← 謎。内容をみたらバイナリファイルだった。ひとまず置いとこう
+3. `/lib`、`/lib64`配下！
 
 ## DynamicLoad
 

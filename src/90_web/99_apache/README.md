@@ -1041,3 +1041,18 @@ $ ./configure
 $ make
 $ make install
 ```
+
+`libfcgi`は`/usr/local/lib`にあってデフォルトの dynamic link の検索パスにではない。
+なので、以下の環境変数にパスを追加する必要がある。
+
+```
+$ export LD_LIBRARY_PATH=/usr/local/lib
+```
+
+`.bash_profile`に書いちゃおう。
+
+.bash_profile
+
+```
+$LD_LIBRARY_PATH=/usr/local/lib
+```
